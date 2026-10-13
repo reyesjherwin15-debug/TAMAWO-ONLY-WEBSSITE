@@ -2956,10 +2956,15 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
-            if (err.code === 'failed-precondition') console.warn('Firestore persistence: multiple tabs open, cache disabled for this tab.');
-            else if (err.code === 'unimplemented') console.warn('Firestore persistence: not supported in this browser.');
-        });
+        try {
+            db.settings({
+                cache: firebase.firestore.persistentLocalCache({
+                    tabManager: firebase.firestore.persistentMultipleTabManager()
+                })
+            });
+        } catch (e) {
+            console.warn('Firestore cache settings failed, falling back to default.', e);
+        }
 
         const CLOUDINARY_CONFIG = { cloudName: "x7i7vzvo", uploadPreset: "t-amawo" };
 
