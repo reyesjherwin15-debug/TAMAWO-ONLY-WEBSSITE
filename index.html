@@ -420,7 +420,7 @@
         .carousel-divider { border: none; height: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--theme-primary) 15%, transparent), transparent); margin: 20px auto; max-width: 1200px; }
 
         /* ================================================================
-           ===== MEMBERS
+           ===== MEMBERS =====
            ================================================================ */
         .members-section { padding: 60px 40px 80px; max-width: 1200px; margin: 0 auto; position: relative; z-index: 1; }
         .members-section .section-header { text-align: center; margin-bottom: 40px; }
@@ -1391,7 +1391,7 @@
         .highlight-mention-dropdown.show { display: block; }
 
         /* ================================================================
-           ===== HIGHLIGHT REACTIONS
+           ===== ★ HIGHLIGHT REACTIONS =====
            ================================================================ */
         .hl-reaction-bar {
             display: flex;
@@ -1885,7 +1885,7 @@
         }
 
         /* ================================================================
-           ===== FULL VIEW MULTI-IMAGE NAVIGATION =====
+           ===== ★ FULL VIEW MULTI-IMAGE NAVIGATION =====
            ================================================================ */
         .fullview-modal .fullview-nav {
             position: absolute;
@@ -1944,6 +1944,7 @@
             letter-spacing: 0.5px;
         }
 
+        /* Hide nav buttons on mobile — use swipe instead */
         @media (max-width: 768px) {
             .fullview-modal .fullview-nav {
                 display: none !important;
@@ -2941,7 +2942,7 @@
 
     <script>
         // ================================================================
-        // ===== FIREBASE INIT (TAMAWO) =====
+        // ===== FIREBASE INIT =====
         // ================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAK72dcYowrbZnvbKvWW4rBfKRDJTNDGiA",
@@ -2956,54 +2957,15 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        // Use the modern cache API (silences the deprecation warning too)
-        try {
-            db.settings({
-                cache: firebase.firestore.persistentLocalCache({
-                    tabManager: firebase.firestore.persistentMultipleTabManager()
-                })
-            });
-        } catch (e) {
-            console.warn('Firestore cache settings failed, using default.', e);
-        }
-
-        // ================================================================
-        // ===== LOADING OVERLAY SAFETY NET =====
-        // ================================================================
-        // Hide the overlay no matter what — even if Firebase auth never
-        // settles, a script throws, or the network is down. This runs on
-        // a fixed timer independent of any async chain.
-        (function () {
-            const FORCE_HIDE_MS = 2500;
-
-            function forceHideLoader(reason) {
-                const overlay = document.getElementById('loadingOverlay');
-                if (!overlay) return;
-                if (!overlay.classList.contains('active')) return;
-                overlay.classList.remove('active');
-                overlay.setAttribute('aria-hidden', 'true');
-                console.log('[loader] hidden —', reason);
+        db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+            if (err.code === 'failed-precondition') {
+                console.warn('Firestore persistence: multiple tabs open, cache disabled for this tab.');
+            } else if (err.code === 'unimplemented') {
+                console.warn('Firestore persistence: not supported in this browser.');
             }
+        });
 
-            // Fire once the DOM is ready
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', () => {
-                    setTimeout(() => forceHideLoader('DOMContentLoaded + ' + FORCE_HIDE_MS + 'ms'), FORCE_HIDE_MS);
-                });
-            } else {
-                setTimeout(() => forceHideLoader('script ran + ' + FORCE_HIDE_MS + 'ms'), FORCE_HIDE_MS);
-            }
-
-            // Also try immediately (in case DOM is already parsed)
-            setTimeout(() => forceHideLoader('immediate check'), 300);
-
-            // Catch any uncaught error and still hide the loader
-            window.addEventListener('error', () => forceHideLoader('window error'));
-            window.addEventListener('unhandledrejection', () => forceHideLoader('unhandled rejection'));
-        })();
-
-        const CLOUDINARY_CONFIG = { cloudName: "x7i7vzvo", uploadPreset: "t-amawo" };
-
+        const CLOUDINARY_CONFIG = { cloudName: "x7i7vzvo" };
         const CAROUSEL_AUTOPLAY_MS = 10000;
         const MOBILE_BREAKPOINT = 768;
 
@@ -3022,7 +2984,7 @@
         const COMMENT_CLEANUP_BATCH_LIMIT = 450;
 
         // ================================================================
-        // ===== HIGHLIGHT REACTIONS CONSTANTS =====
+        // ===== ★ HIGHLIGHT REACTIONS CONSTANTS =====
         // ================================================================
         const HIGHLIGHT_REACTION_TYPES = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
         const HIGHLIGHT_REACTION_EMOJI = {
@@ -3049,19 +3011,6 @@
         const carouselItemCache = {};
 
         let isUserLoggedIn = false;
-
-        // ================================================================
-        // ===== CAROUSEL STATE OBJECTS =====
-        // ================================================================
-        const highlightsCarouselState = {
-            slides: [],
-            currentIndex: 0,
-            interval: null
-        };
-
-        const coffeeCarouselState     = { slides: [], currentIndex: 0, interval: null };
-        const placesCarouselState     = { slides: [], currentIndex: 0, interval: null };
-        const activitiesCarouselState = { slides: [], currentIndex: 0, interval: null };
 
         let currentItem = null;
         let currentMember = null;
@@ -3121,7 +3070,7 @@
         const ANNOUNCEMENT_CACHE_TTL = 5 * 60 * 1000;
 
         // ================================================================
-        // ===== TOASTS & CONFIRM DIALOG & LOADING OVERLAY =====
+        // ===== ★ TOASTS & CONFIRM DIALOG & LOADING OVERLAY =====
         // ================================================================
         function showToast(message, type = 'info', duration = 3200) {
             const stack = document.getElementById('toastStack');
@@ -3250,7 +3199,7 @@
         }
 
         // ================================================================
-        // ===== HIGHLIGHT REACTIONS SYSTEM =====
+        // ===== ★ HIGHLIGHT REACTIONS SYSTEM =====
         // ================================================================
         function ensureHighlightReactionCache(highlightId) {
             if (!highlightReactionsCache[highlightId]) {
@@ -3264,10 +3213,12 @@
         }
 
         function attachHighlightReactionsListener(highlightId) {
+            // ★ Guard: only accept a non-empty string
             if (typeof highlightId !== 'string' || !highlightId.trim()) {
                 console.warn('[attachHighlightReactionsListener] refusing non-string id:', highlightId);
                 return;
             }
+            // Don't attach twice
             if (highlightReactionUnsubscribes[highlightId]) return;
 
             const unsub = db.collection('highlights').doc(highlightId).collection('reactions')
@@ -5854,7 +5805,7 @@
 
             const linkBtn = document.getElementById('annViewLinkBtn');
             const linkLabel = document.getElementById('annViewLinkLabel');
-
+            
             if (item.link) {
                 linkBtn.style.display = 'inline-flex';
                 linkBtn.href = item.link;
@@ -6249,66 +6200,6 @@
         }
 
         // ================================================================
-        // ===== USER PROFILE CACHE =====
-        // ================================================================
-        // Short-lived in-memory + sessionStorage cache to avoid re-reading
-        // the same user doc on every auth state change / navigation.
-        async function getCurrentUserProfileCached(user) {
-            if (!user || !user.uid) return null;
-
-            const uid = user.uid;
-            const now = Date.now();
-            const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-            // 1. In-memory cache (fastest, wiped on page reload)
-            const mem = userProfileCache[uid];
-            if (mem && mem._cachedAt && (now - mem._cachedAt) < CACHE_TTL) {
-                return mem;
-            }
-
-            // 2. sessionStorage cache (survives soft reloads in the same tab)
-            try {
-                const raw = sessionStorage.getItem('tamawo_me_' + uid);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && parsed.t && (now - parsed.t) < CACHE_TTL && parsed.data) {
-                        userProfileCache[uid] = { id: uid, _cachedAt: parsed.t, ...parsed.data };
-                        return userProfileCache[uid];
-                    }
-                }
-            } catch (e) { /* ignore */ }
-
-            // 3. Firestore read (authoritative)
-            try {
-                const doc = await db.collection('users').doc(uid).get();
-                const data = doc.exists ? doc.data() : {};
-                const merged = { id: uid, _cachedAt: now, ...data };
-
-                userProfileCache[uid] = merged;
-
-                try {
-                    sessionStorage.setItem('tamawo_me_' + uid, JSON.stringify({
-                        uid, t: now, data
-                    }));
-                } catch (e) { /* quota / private mode — ignore */ }
-
-                return merged;
-            } catch (err) {
-                console.warn('getCurrentUserProfileCached: Firestore read failed, using auth fallback.', err);
-                // Fallback: at least give the caller the auth-provided fields
-                const fallback = {
-                    id: uid,
-                    _cachedAt: now,
-                    displayName: user.displayName || '',
-                    email: user.email || '',
-                    photoURL: user.photoURL || ''
-                };
-                userProfileCache[uid] = fallback;
-                return fallback;
-            }
-        }
-
-        // ================================================================
         // ===== NAV =====
         // ================================================================
         async function updateNavigation(user) {
@@ -6393,9 +6284,7 @@
                 heroCta.href = 'login.html';
             }
 
-            // index.html renders the members grid via loadMembers() → renderMembersGridFromCache().
-            // There is no renderMembersSection() in this page — that name was stale. Guarded call:
-            if (typeof renderMembersGridFromCache === 'function') renderMembersGridFromCache();
+            renderMembersSection();
         }
 
         auth.onAuthStateChanged(user => updateNavigation(user));
@@ -6442,21 +6331,29 @@
         }
 
         // ================================================================
-        // ===== FULL VIEW MULTI-IMAGE STATE =====
+        // ===== ★ FULL VIEW MULTI-IMAGE STATE =====
         // ================================================================
         let fullViewImages = [];
         let fullViewIndex = 0;
-        let fullViewContext = 'generic';
+        let fullViewContext = 'generic'; // 'gallery' | 'highlight' | 'generic'
         let _fullViewTouchStartX = 0;
         let _fullViewTouchStartY = 0;
         let _fullViewTouchEndX = 0;
         let _fullViewTouchEndY = 0;
-        let _fullViewSwipeBound = false;
-        let _fullViewSwipeCooldownUntil = 0;
+        let _fullViewSwipeAttached = false;
 
+        /**
+         * Open the full-view modal.
+         * @param {string} imageUrl - The image to display (ignored if imagesArray provided).
+         * @param {string} filename - Suggested download filename.
+         * @param {string[]} [imagesArray] - Optional array of image URLs for multi-image navigation.
+         * @param {number} [startIndex] - Index within imagesArray to start on.
+         * @param {string} [context] - 'gallery' | 'highlight' | 'generic'.
+         */
         function openFullView(imageUrl, filename, imagesArray = null, startIndex = 0, context = 'generic') {
             if (!imageUrl && (!imagesArray || imagesArray.length === 0)) return;
 
+            // If an array is provided, use it for navigation
             if (imagesArray && imagesArray.length > 0) {
                 fullViewImages = imagesArray;
                 fullViewIndex = Math.max(0, Math.min(startIndex, imagesArray.length - 1));
@@ -6480,6 +6377,7 @@
             document.body.style.overflow = 'hidden';
             syncModalOpenState();
 
+            // Attach swipe listeners
             attachFullViewSwipe();
         }
 
@@ -6503,6 +6401,10 @@
             }
         }
 
+        /**
+         * Navigate forward/backward through the current fullViewImages array.
+         * @param {number} direction - -1 for previous, +1 for next.
+         */
         function fullViewNavigate(direction) {
             if (fullViewImages.length <= 1) return;
 
@@ -6521,8 +6423,9 @@
                 updateFullViewUI();
             }, 150);
 
+            // Update download filename based on context
             if (fullViewContext === 'gallery') {
-                const safeAuthor = sanitizeFilename(currentGalleryAuthor);
+                const safeAuthor = sanitizeFilename(currentGalleryAuthor || 'highlight');
                 const ext = extFromUrl(currentFullViewUrl);
                 currentFullViewFilename = `TAMAWO_${safeAuthor}_photo_${fullViewIndex + 1}.${ext}`;
             } else if (fullViewContext === 'highlight') {
@@ -6555,7 +6458,15 @@
             }
         }
 
+        // ===== SWIPE SUPPORT FOR FULL VIEW =====
+        let _fullViewSwipeBound = false;
+        let _fullViewSwipeCooldownUntil = 0;
+
         function attachFullViewSwipe() {
+            // ★ Attach the swipe listeners to the MODAL CONTENT (not the img),
+            //   and only ONCE per page load. The modal content persists in the
+            //   DOM, so binding here avoids duplicate listeners stacking up
+            //   every time the modal is opened.
             const content = document.querySelector('#fullViewModal .modal-content');
             if (!content || _fullViewSwipeBound) return;
             _fullViewSwipeBound = true;
@@ -6586,10 +6497,15 @@
         }
 
         function detachFullViewSwipe() {
-            // Listeners are bound once to the persistent modal content.
+            // The listeners are bound once to the persistent modal content,
+            // so there's nothing to detach. Kept as a no-op for compatibility
+            // with existing call sites.
         }
 
         function handleFullViewSwipe() {
+            // ★ Cooldown guard: prevents a single physical swipe from
+            //   firing multiple navigations if duplicate touch events
+            //   are delivered (common on some mobile browsers).
             const now = Date.now();
             if (now < _fullViewSwipeCooldownUntil) return;
             _fullViewSwipeCooldownUntil = now + 350;
@@ -6598,248 +6514,185 @@
             const diffX = _fullViewTouchEndX - _fullViewTouchStartX;
             const diffY = _fullViewTouchEndY - _fullViewTouchStartY;
 
+            // Only handle horizontal swipes (ignore vertical scrolling)
             if (Math.abs(diffX) < swipeThreshold || Math.abs(diffY) > Math.abs(diffX)) return;
 
             if (fullViewImages.length <= 1) return;
 
             if (diffX < 0) {
+                // Swipe left → next image
                 fullViewNavigate(1);
             } else {
+                // Swipe right → previous image
                 fullViewNavigate(-1);
             }
         }
 
-        // ================================================================
-        // ===== HIGHLIGHTS =====
-        // ================================================================
-        function fullViewHighlight(id) {
-            if (!id) return;
+        function openItemModal(item, type) {
+            currentItem = { ...item, _type: type };
 
-            db.collection('highlights').doc(id).get().then(snap => {
-                if (!snap.exists) {
-                    showToast('This highlight no longer exists.', 'warn');
-                    return;
-                }
-                const item = snap.data();
-                if (!item.imageURLs || item.imageURLs.length === 0) {
-                    showToast('No image available to view.', 'warn');
-                    return;
-                }
+            const imageEl = document.getElementById('itemModalImage');
+            const titleEl = document.getElementById('itemModalTitle');
+            const locEl = document.getElementById('itemModalLocation');
+            const descEl = document.getElementById('itemModalDescription');
+            const tagEl = document.getElementById('itemModalTag');
+            const downloadBtn = document.getElementById('itemModalDownloadBtn');
+            const fullViewBtn = document.getElementById('itemModalFullViewBtn');
 
-                currentHighlightDetailId = id;
-                const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
-                const images = item.imageURLs;
+            if (item.imageUrl) {
+                imageEl.src = item.imageUrl;
+                imageEl.style.display = 'block';
+            } else {
+                imageEl.src = '';
+                imageEl.style.display = 'none';
+            }
 
-                openFullView(images[0], `TAMAWO_${safeAuthor}_photo_1.${extFromUrl(images[0])}`,
-                    images, 0, 'highlight');
-            }).catch(err => {
-                console.error('fullViewHighlight error:', err);
-                showToast('Could not load image.', 'error');
-            });
+            titleEl.textContent = item.title || 'Untitled';
+            locEl.querySelector('span').textContent = item.location || 'No location';
+            descEl.textContent = item.description || 'No description provided.';
+            tagEl.textContent = item.tag || defaultTagFor(type);
+
+            if (item.imageUrl) {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download Image';
+                fullViewBtn.style.display = 'inline-flex';
+            } else {
+                downloadBtn.disabled = true;
+                downloadBtn.innerHTML = '<i class="fas fa-ban"></i> No image';
+                fullViewBtn.style.display = 'none';
+            }
+
+            document.getElementById('itemModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            syncModalOpenState();
         }
 
-        async function downloadSingleHighlightImage(id) {
-            if (!id) return;
+        function fullViewCurrentItem() {
+            if (!currentItem || !currentItem.imageUrl) return;
+            const safeTitle = sanitizeFilename(currentItem.title || 'item');
+            const ext = extFromUrl(currentItem.imageUrl);
+            openFullView(currentItem.imageUrl, `TAMAWO_${safeTitle}.${ext}`);
+        }
+
+        function defaultTagFor(type) {
+            if (type === 'coffeeShops') return '☕ Coffee';
+            if (type === 'favoritePlaces') return '📍 Place';
+            if (type === 'thingsToDo') return '🎯 Activity';
+            return 'Item';
+        }
+
+        function closeItemModal() {
+            document.getElementById('itemModal').classList.remove('active');
+            if (!anyModalOpen()) document.body.style.overflow = 'auto';
+            document.getElementById('itemModalImage').src = '';
+            currentItem = null;
+            syncModalOpenState();
+        }
+
+        async function downloadCurrentItem() {
+            if (!currentItem || !currentItem.imageUrl) {
+                showToast('No image available to download.', 'warn');
+                return;
+            }
+            const safeTitle = sanitizeFilename(currentItem.title);
+            const ext = extFromUrl(currentItem.imageUrl);
+            const filename = `TAMAWO_${safeTitle}.${ext}`;
             try {
-                const doc = await db.collection('highlights').doc(id).get();
-                if (!doc.exists) {
-                    showToast('This highlight no longer exists.', 'warn');
-                    return;
-                }
-                const item = doc.data();
-                if (!item.imageURLs || item.imageURLs.length === 0) {
-                    showToast('No image available to download.', 'warn');
-                    return;
-                }
-                const url = item.imageURLs[0];
-                const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
-                const ext = extFromUrl(url);
-                const filename = `TAMAWO_${safeAuthor}_photo_1.${ext}`;
-                await downloadImage(url, filename);
-                showToast('Image downloaded', 'success', 2000);
+                await downloadImage(currentItem.imageUrl, filename);
             } catch (err) {
-                console.error('downloadSingleHighlightImage error:', err);
-                showToast('Failed to download: ' + err.message, 'error');
+                window.open(currentItem.imageUrl, '_blank', 'noopener');
             }
         }
 
-        // ================================================================
-        // ===== LOAD HIGHLIGHTS =====
-        // ================================================================
-        function loadHighlights() {
-            if (unsubscribeHighlights) unsubscribeHighlights();
-            return new Promise((resolve) => {
-                unsubscribeHighlights = db.collection('highlights')
-                    .orderBy('createdAt', 'desc')
-                    .limit(HIGHLIGHTS_LIMIT)
-                    .onSnapshot(async (snapshot) => {
-                        const countBadge = document.getElementById('highlightCountBadge');
-                        if (snapshot.empty) {
-                            renderHighlightsCarousel([]);
-                            if (countBadge) countBadge.textContent = '0';
-                            resolve();
-                            return;
-                        }
+        const carouselDataStore = {};
 
-                        const authorUids = new Set();
-                        snapshot.forEach(doc => {
-                            const data = doc.data();
-                            if (data.authorUid) authorUids.add(data.authorUid);
-                        });
+        function loadCarouselData(collection, trackId, dotsId, carouselId) {
+            const track = document.getElementById(trackId);
+            if (!track) return;
 
-                        const missingUids = [...authorUids].filter(uid => !userProfileCache[uid]);
-                        await Promise.all(missingUids.map(async uid => {
-                            try {
-                                const uDoc = await db.collection('users').doc(uid).get();
-                                if (uDoc.exists) userProfileCache[uid] = { id: uid, ...uDoc.data() };
-                            } catch (e) {}
-                        }));
-
-                        const now = new Date();
-                        const validHighlights = [];
-                        const expiredItems = [];
-
-                        snapshot.forEach(doc => {
-                            const data = doc.data();
-                            const id = doc.id;
-                            const expiresAt = data.expiresAt ? new Date(data.expiresAt.toDate()) : new Date();
-                            if (expiresAt - now <= 0) {
-                                expiredItems.push({
-                                    id,
-                                    imageURLs: data.imageURLs || [],
-                                    imagePublicIds: data.imagePublicIds || []
-                                });
-                                return;
-                            }
-                            validHighlights.push({ id, ...data });
-                        });
-
-                        renderHighlightsCarousel(validHighlights);
-                        if (countBadge) countBadge.textContent = `${validHighlights.length}`;
-                        updateSelectionUI();
-
-                        const visibleIds = validHighlights.map(h => h.id);
-                        attachHighlightCommentCountListeners(visibleIds);
-
-                        detachAllHighlightReactionsListeners();
-                        visibleIds.forEach(hid => attachHighlightReactionsListener(hid));
-
-                        if (expiredItems.length) {
-                            setTimeout(() => {
-                                expiredItems.forEach(item => deleteHighlightSilent(item.id, item.imageURLs, item.imagePublicIds));
-                            }, 0);
-                        }
-                        resolve();
-                    }, (error) => {
-                        console.error('Error loading highlights:', error);
-                        resolve();
+            db.collection(collection)
+                .orderBy('createdAt', 'desc')
+                .limit(CAROUSEL_LIMIT)
+                .onSnapshot((snapshot) => {
+                    const items = [];
+                    snapshot.forEach(doc => {
+                        const data = { id: doc.id, ...doc.data() };
+                        items.push(data);
+                        carouselItemCache[`${collection}:${doc.id}`] = data;
                     });
-            });
+
+                    carouselDataStore[carouselId] = { items, trackId, dotsId, collection, track };
+                    renderCarousel(carouselId, false);
+                });
         }
 
-        function renderHighlightsCarousel(items) {
-            const track = document.getElementById('highlightsTrack');
-            const dotsContainer = document.getElementById('highlightsDots');
-            stopHighlightsAutoplay();
+        function renderCarousel(carouselId, preserveAutoplayState) {
+            const store = carouselDataStore[carouselId];
+            if (!store) return;
+
+            const { items, track, dotsId, collection } = store;
+            const existingCarousel = carousels[carouselId];
+            const wasRunning = preserveAutoplayState && existingCarousel && existingCarousel.interval !== null;
+            if (existingCarousel) stopAutoplay(carouselId);
 
             if (!items || items.length === 0) {
+                const iconMap = { 'coffeeShops': 'coffee', 'favoritePlaces': 'map-marked-alt', 'thingsToDo': 'gamepad' };
+                const icon = iconMap[collection] || 'coffee';
                 track.innerHTML = `
-                    <div class="highlights-carousel-slide single-item" style="display:flex;align-items:center;justify-content:center;padding:40px;min-height:250px;">
-                        <div class="empty-highlights">
-                            <i class="fas fa-images"></i>
-                            <h3>No highlights yet</h3>
-                            <p>Share your favorite moments with the squad!</p>
+                    <div class="carousel-slide single-item" style="display:flex;align-items:center;justify-content:center;padding:40px;min-height:200px;">
+                        <div style="text-align:center;color:var(--theme-text-dim);">
+                            <i class="fas fa-${icon}" style="font-size:40px;color:var(--theme-primary-soft);display:block;margin-bottom:10px;"></i>
+                            <h3 style="color:var(--theme-text);font-size:18px;">No items yet</h3>
+                            <p>Admin can add items in the control panel.</p>
                         </div>
                     </div>
                 `;
-                dotsContainer.innerHTML = '';
-                const dot = document.createElement('button');
-                dot.className = 'dot active';
-                dotsContainer.appendChild(dot);
-                highlightsCarouselState.slides = [];
+                const dotsContainer = document.getElementById(dotsId);
+                if (dotsContainer) {
+                    dotsContainer.innerHTML = '';
+                    const dot = document.createElement('button');
+                    dot.className = 'dot active';
+                    dotsContainer.appendChild(dot);
+                }
+                delete carousels[carouselId];
                 return;
             }
 
-            const perSlide = isMobile() ? 1 : 3;
+            const perSlide = getItemsPerSlide();
             const slides = [];
-            for (let i = 0; i < items.length; i += perSlide) {
-                slides.push(items.slice(i, i + perSlide));
-            }
+            for (let i = 0; i < items.length; i += perSlide) slides.push(items.slice(i, i + perSlide));
+
+            const iconMap = { 'coffeeShops': 'coffee', 'favoritePlaces': 'map-marked-alt', 'thingsToDo': 'gamepad' };
+            const icon = iconMap[collection] || 'coffee';
 
             let html = '';
             slides.forEach(slide => {
-                const slideClass = perSlide === 1 ? 'highlights-carousel-slide single-item' : 'highlights-carousel-slide';
+                const slideClass = perSlide === 1 ? 'carousel-slide single-item' : 'carousel-slide';
                 html += `<div class="${slideClass}">`;
                 slide.forEach(item => {
-                    const imageUrls = item.imageURLs || [];
-                    const mainImage = imageUrls.length > 0 ? imageUrls[0] : '';
-                    const thumbImage = mainImage ? cloudinaryThumb(mainImage, 500) : '';
-                    const authorName = item.authorName || 'Someone';
-                    const authorUid = item.authorUid || '';
-                    const authorProfile = userProfileCache[authorUid] || {};
-                    const authorPhoto = authorProfile.photoURL || '';
-                    const initials = authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-                    const caption = item.caption || '';
-                    const expiresAt = item.expiresAt ? new Date(item.expiresAt.toDate()) : new Date();
-                    const now = new Date();
-                    const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
-                    const isUrgent = daysLeft <= 1;
-                    const hasMulti = imageUrls.length > 1;
-                    const hasImages = imageUrls.length > 0;
-                    const isSelected = selectedHighlights.has(item.id);
-
-                    const commentCount = highlightCommentCounts[item.id] || 0;
-
-                    const avatarContent = authorPhoto
-                        ? `<img src="${cloudinaryThumb(authorPhoto, 60)}" alt="${escapeAttr(authorName)}" loading="lazy" decoding="async" />`
-                        : initials;
-
-                    const safeId = escapeAttr(item.id);
+                    const tag = item.tag || defaultTagFor(collection);
+                    const imageHtml = item.imageUrl
+                        ? `<img src="${cloudinaryThumb(item.imageUrl, 500)}" alt="${escapeAttr(item.title || 'Item')}" loading="lazy" decoding="async" />`
+                        : `<i class="fas fa-${icon}"></i>`;
+                    const hasImage = !!item.imageUrl;
+                    const itemIdSafe = escapeAttr(item.id);
+                    const collSafe = escapeAttr(collection);
 
                     html += `
-                        <div class="highlights-carousel-item ${isSelected ? 'selected' : ''}" data-highlight-id="${safeId}">
-                            <div class="image-container">
-                                ${thumbImage
-                                    ? `<img src="${thumbImage}" alt="Highlight" loading="lazy" decoding="async" />`
-                                    : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:40px;color:var(--theme-primary);"><i class="fas fa-image"></i></div>`}
-                                ${hasMulti ? `<span class="image-count"><i class="fas fa-images"></i> ${imageUrls.length}</span>` : ''}
-                                <span class="expiry-badge"><i class="fas fa-clock"></i> ${daysLeft}d left</span>
-                                ${hasImages ? `
-                                    <div class="hl-actions">
-                                        ${hasMulti ? `
-                                            <button class="hl-view" onclick="event.stopPropagation(); openGallery('${safeId}')">
-                                                <i class="fas fa-expand"></i> View All
-                                            </button>
-                                            <button class="hl-fullview" onclick="event.stopPropagation(); fullViewHighlight('${safeId}')">
-                                                <i class="fas fa-search-plus"></i> Full
-                                            </button>
-                                            <button class="hl-download" onclick="event.stopPropagation(); downloadAllHighlightImages('${safeId}')">
-                                                <i class="fas fa-file-zipper"></i> Zip
-                                            </button>
-                                        ` : `
-                                            <button class="hl-fullview" onclick="event.stopPropagation(); fullViewHighlight('${safeId}')">
-                                                <i class="fas fa-search-plus"></i> Full
-                                            </button>
-                                            <button class="hl-download" onclick="event.stopPropagation(); downloadSingleHighlightImage('${safeId}')">
-                                                <i class="fas fa-download"></i> Download
-                                            </button>
-                                        `}
-                                    </div>
-                                ` : ''}
+                        <div class="carousel-item" data-item-id="${itemIdSafe}" data-item-collection="${collSafe}">
+                            <div class="image-placeholder">
+                                ${imageHtml}
+                                <div class="item-actions">
+                                    <button class="item-view" title="View details" onclick="event.stopPropagation(); openItemFromCarousel('${collSafe}', '${itemIdSafe}')"><i class="fas fa-expand"></i></button>
+                                    ${hasImage ? `<button class="item-fullview" title="View full image" onclick="event.stopPropagation(); quickFullViewItem('${collSafe}', '${itemIdSafe}')"><i class="fas fa-search-plus"></i></button>` : ''}
+                                    ${hasImage ? `<button class="item-download" title="Download image" onclick="event.stopPropagation(); quickDownloadItem('${collSafe}', '${itemIdSafe}')"><i class="fas fa-download"></i></button>` : ''}
+                                </div>
                             </div>
                             <div class="item-body">
-                                ${caption ? `<div class="caption">${escapeHtml(caption)}</div>` : ''}
-                                <div class="meta">
-                                    <span class="author"><span class="avatar-small">${avatarContent}</span> ${escapeHtml(authorName)}</span>
-                                    <span class="expiry-time ${isUrgent ? 'urgent' : ''}"><i class="fas fa-clock"></i> ${daysLeft}d left</span>
-                                </div>
-                                <div class="meta" style="margin-top:6px; padding-top:6px; border-top:1px solid var(--theme-border-soft);">
-                                    <span style="font-size:11px; color:var(--theme-text-dim); display:flex; align-items:center; gap:4px;">
-                                        <i class="fas fa-comment"></i>
-                                        <span data-hl-comment-count="${safeId}" style="display:${commentCount > 0 ? 'inline-flex' : 'none'}; font-weight:700; color:var(--theme-primary);">${commentCount}</span>
-                                    </span>
-                                </div>
-                                ${renderHighlightReactionBar(item.id)}
+                                <h4>${escapeHtml(item.title || 'Untitled')}</h4>
+                                <div class="location"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(item.location || 'No location')}</div>
+                                <div class="description">${escapeHtml(item.description || '')}</div>
+                                <span class="tag">${escapeHtml(tag)}</span>
                             </div>
                         </div>
                     `;
@@ -6849,176 +6702,291 @@
 
             track.innerHTML = html;
 
-            track.querySelectorAll('.highlights-carousel-item').forEach(card => {
-                card.addEventListener('click', function(e) {
-                    if (e.target.closest('.hl-actions')) return;
-                    if (e.target.closest('.hl-reaction-bar')) return;
-                    if (e.target.closest('.hl-reaction-btn')) return;
-                    if (e.target.closest('.hl-reaction-picker')) return;
-                    openHighlightDetail(this.dataset.highlightId);
+            track.querySelectorAll('.carousel-item').forEach(card => {
+                card.addEventListener('click', function() {
+                    openItemFromCarousel(this.dataset.itemCollection, this.dataset.itemId);
                 });
             });
 
-            dotsContainer.innerHTML = '';
-            slides.forEach((_, i) => {
-                const dot = document.createElement('button');
-                dot.className = 'dot' + (i === 0 ? ' active' : '');
-                dot.onclick = () => goToHighlightsSlide(i);
-                dotsContainer.appendChild(dot);
-            });
+            const dotsContainer = document.getElementById(dotsId);
+            if (dotsContainer) {
+                dotsContainer.innerHTML = '';
+                slides.forEach((_, i) => {
+                    const dot = document.createElement('button');
+                    dot.className = 'dot' + (i === 0 ? ' active' : '');
+                    dot.onclick = () => goToSlide(carouselId, i);
+                    dotsContainer.appendChild(dot);
+                });
+            }
 
-            highlightsCarouselState.slides = track.querySelectorAll('.highlights-carousel-slide');
-            highlightsCarouselState.currentIndex = 0;
-            updateHighlightsCarouselTransform();
-            if (slides.length > 1) startHighlightsAutoplay();
+            carousels[carouselId] = {
+                track,
+                slides: track.querySelectorAll('.carousel-slide'),
+                dots: dotsContainer ? dotsContainer.querySelectorAll('.dot') : [],
+                currentIndex: 0,
+                totalSlides: slides.length,
+                interval: null
+            };
+
+            updateCarousel(carouselId);
+            if (wasRunning || !preserveAutoplayState) startAutoplay(carouselId);
         }
 
-        function updateHighlightsCarouselTransform() {
-            const track = document.getElementById('highlightsTrack');
-            if (!track) return;
-            track.style.transform = `translateX(-${highlightsCarouselState.currentIndex * 100}%)`;
-            const dots = document.querySelectorAll('#highlightsDots .dot');
-            dots.forEach((dot, i) => {
-                dot.className = 'dot' + (i === highlightsCarouselState.currentIndex ? ' active' : '');
-            });
+        function openItemFromCarousel(collection, itemId) {
+            const item = carouselItemCache[`${collection}:${itemId}`];
+            if (!item) return;
+            openItemModal(item, collection);
         }
 
-        window.moveHighlightsCarousel = function(direction) {
-            const slidesCount = highlightsCarouselState.slides.length;
-            if (slidesCount === 0) return;
-            stopHighlightsAutoplay();
-            highlightsCarouselState.currentIndex = (highlightsCarouselState.currentIndex + direction + slidesCount) % slidesCount;
-            updateHighlightsCarouselTransform();
-            startHighlightsAutoplay();
-        };
-
-        function goToHighlightsSlide(i) {
-            highlightsCarouselState.currentIndex = i;
-            updateHighlightsCarouselTransform();
-            stopHighlightsAutoplay();
-            startHighlightsAutoplay();
+        async function quickDownloadItem(collection, itemId) {
+            const item = carouselItemCache[`${collection}:${itemId}`];
+            if (!item || !item.imageUrl) return;
+            const prev = currentItem;
+            currentItem = { ...item, _type: collection };
+            await downloadCurrentItem();
+            currentItem = prev;
         }
 
-        function startHighlightsAutoplay() {
-            stopHighlightsAutoplay();
-            if (highlightsCarouselState.slides.length <= 1) return;
-            highlightsCarouselState.interval = setInterval(() => {
-                const slidesCount = highlightsCarouselState.slides.length;
-                highlightsCarouselState.currentIndex = (highlightsCarouselState.currentIndex + 1) % slidesCount;
-                updateHighlightsCarouselTransform();
-            }, CAROUSEL_AUTOPLAY_MS);
+        function quickFullViewItem(collection, itemId) {
+            const item = carouselItemCache[`${collection}:${itemId}`];
+            if (!item || !item.imageUrl) return;
+            const safeTitle = sanitizeFilename(item.title || 'item');
+            const ext = extFromUrl(item.imageUrl);
+            openFullView(item.imageUrl, `TAMAWO_${safeTitle}.${ext}`);
         }
 
-        function stopHighlightsAutoplay() {
-            if (highlightsCarouselState.interval) {
-                clearInterval(highlightsCarouselState.interval);
-                highlightsCarouselState.interval = null;
+        function openMemberModal(memberId) {
+            const member = carouselItemCache[`users:${memberId}`];
+            if (!member) return;
+            currentMember = member;
+
+            const avatarCircleEl = document.getElementById('memberModalAvatarCircle');
+
+            const name = member.displayName || member.email || 'Anonymous';
+            const photoUrl = member.photoURL || '';
+
+            if (photoUrl) {
+                avatarCircleEl.innerHTML = `<img src="${cloudinaryAvatar(photoUrl, 600)}" alt="${escapeAttr(name)}" />`;
+            } else {
+                const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                avatarCircleEl.innerHTML = `<span class="member-modal-initials">${escapeHtml(initials)}</span>`;
+            }
+
+            document.getElementById('memberModalName').textContent = name;
+            document.getElementById('memberModalLocation').querySelector('span').textContent = member.location || 'Not set';
+
+            document.getElementById('memberModalBio').textContent = member.bio || 'No bio provided.';
+
+            const interests = member.interests
+                ? member.interests.split(',').map(t => t.trim()).filter(t => t)
+                : [];
+            const interestsSection = document.getElementById('memberModalInterestsSection');
+            const interestsEl = document.getElementById('memberModalInterests');
+            if (interests.length) {
+                interestsEl.innerHTML = interests.map(t => `<span class="interest-tag">#${escapeHtml(t)}</span>`).join('');
+                interestsSection.style.display = 'block';
+            } else {
+                interestsSection.style.display = 'none';
+            }
+
+            const socialsEl = document.getElementById('memberModalSocials');
+            const socialsSection = document.getElementById('memberModalSocialsSection');
+            let socialsHtml = '';
+            if (member.instagram) socialsHtml += `<a href="https://instagram.com/${encodeURIComponent(member.instagram.replace('@',''))}" target="_blank" rel="noopener" title="Instagram"><i class="fab fa-instagram"></i></a>`;
+            if (member.twitter) socialsHtml += `<a href="https://twitter.com/${encodeURIComponent(member.twitter.replace('@',''))}" target="_blank" rel="noopener" title="Twitter / X"><i class="fab fa-twitter"></i></a>`;
+            if (member.tiktok) socialsHtml += `<a href="https://tiktok.com/@${encodeURIComponent(member.tiktok.replace('@',''))}" target="_blank" rel="noopener" title="TikTok"><i class="fab fa-tiktok"></i></a>`;
+            if (member.facebook) socialsHtml += `<a href="${escapeAttr(member.facebook)}" target="_blank" rel="noopener" title="Facebook"><i class="fab fa-facebook"></i></a>`;
+            if (socialsHtml) {
+                socialsSection.style.display = 'block';
+                socialsEl.innerHTML = socialsHtml;
+            } else {
+                socialsSection.style.display = 'none';
+            }
+
+            const metaGrid = document.getElementById('memberModalMetaGrid');
+            const lockedBanner = document.getElementById('memberModalLockedBanner');
+
+            if (isUserLoggedIn) {
+                metaGrid.style.display = 'grid';
+                lockedBanner.style.display = 'none';
+
+                const statusInfo = getStatusLabel(member.status || 'offline');
+                const loveLifeInfo = getLoveLifeLabel(member.loveLife);
+                const birthdayFormatted = formatBirthday(member.birthday);
+
+                let metaHtml = '';
+                metaHtml += `
+                    <div class="member-modal-meta-item full-width">
+                        <i class="fas fa-circle" style="color:${
+                            member.status === 'available' ? '#22c55e' :
+                            member.status === 'busy' ? '#ef4444' :
+                            member.status === 'away' ? '#f59e0b' :
+                            member.status === 'dnd' ? '#8b5cf6' : '#9ca3af'
+                        };"></i>
+                        <span class="meta-label">Status</span>
+                        <span class="meta-value">${statusInfo.label}</span>
+                    </div>
+                `;
+                if (birthdayFormatted) {
+                    metaHtml += `
+                        <div class="member-modal-meta-item">
+                            <i class="fas fa-birthday-cake"></i>
+                            <span class="meta-label">Bday</span>
+                            <span class="meta-value">${escapeHtml(birthdayFormatted)}</span>
+                        </div>
+                    `;
+                }
+                if (loveLifeInfo) {
+                    metaHtml += `
+                        <div class="member-modal-meta-item">
+                            <i class="fas ${loveLifeInfo.icon}"></i>
+                            <span class="meta-label">Love Life</span>
+                            <span class="meta-value">${loveLifeInfo.label}</span>
+                        </div>
+                    `;
+                }
+                metaGrid.innerHTML = metaHtml;
+            } else {
+                metaGrid.style.display = 'none';
+                lockedBanner.style.display = 'flex';
+            }
+
+            const dlBtn = document.getElementById('memberModalDownloadBtn');
+            if (photoUrl) {
+                dlBtn.disabled = false;
+                dlBtn.innerHTML = '<i class="fas fa-download"></i> Download Profile Picture';
+            } else {
+                dlBtn.disabled = true;
+                dlBtn.innerHTML = '<i class="fas fa-ban"></i> No profile picture';
+            }
+
+            document.getElementById('memberModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            syncModalOpenState();
+        }
+
+        function closeMemberModal() {
+            document.getElementById('memberModal').classList.remove('active');
+            if (!anyModalOpen()) document.body.style.overflow = 'auto';
+            const avatarCircleEl = document.getElementById('memberModalAvatarCircle');
+            if (avatarCircleEl) avatarCircleEl.innerHTML = '<span class="member-modal-initials" id="memberModalInitials"></span>';
+            currentMember = null;
+            syncModalOpenState();
+        }
+
+        async function downloadCurrentMemberAvatar() {
+            if (!currentMember || !currentMember.photoURL) {
+                showToast('No profile picture available.', 'warn');
+                return;
+            }
+            const name = currentMember.displayName || currentMember.email || 'member';
+            const safeName = sanitizeFilename(name);
+            const ext = extFromUrl(currentMember.photoURL);
+            const filename = `TAMAWO_${safeName}_avatar.${ext}`;
+            try {
+                await downloadImage(currentMember.photoURL, filename);
+            } catch (err) {
+                window.open(currentMember.photoURL, '_blank', 'noopener');
             }
         }
 
-        // ================================================================
-        // ===== HIGHLIGHT DETAIL =====
-        // ================================================================
         function openHighlightDetail(highlightId) {
-            db.collection('highlights').doc(highlightId).get().then(doc => {
-                if (!doc.exists) { showToast('This highlight no longer exists.', 'warn'); return; }
-                const item = { id: doc.id, ...doc.data() };
+            const item = highlightsData.find(h => h.id === highlightId);
+            if (!item) return;
 
-                currentHighlightDetailId = highlightId;
-                currentHighlightDetailImageIndex = 0;
-                currentHighlightReplyTo = null;
+            currentHighlightDetailId = highlightId;
+            currentHighlightDetailImageIndex = 0;
+            currentHighlightReplyTo = null;
+            highlightPendingMentions.clear();
+            closeHighlightMentionDropdown();
 
-                const imageUrls = item.imageURLs || [];
-                const mainImage = imageUrls[0] || '';
-                const authorName = item.authorName || 'Someone';
-                const authorUid = item.authorUid || '';
-                const authorProfile = userProfileCache[authorUid] || {};
-                const authorPhoto = authorProfile.photoURL || '';
-                const initials = authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-                const caption = item.caption || '';
-                const expiresAt = item.expiresAt ? new Date(item.expiresAt.toDate()) : new Date();
-                const createdAt = item.createdAt ? new Date(item.createdAt.toDate()) : null;
-                const now = new Date();
-                const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
-                const isUrgent = daysLeft <= 1;
-                const hasMulti = imageUrls.length > 1;
+            const imageUrls = item.imageURLs || [];
+            const mainImage = imageUrls[0] || '';
+            const authorName = item.authorName || 'Someone';
+            const authorUid = item.authorUid || '';
+            const authorProfile = userProfileCache[authorUid] || {};
+            const authorPhoto = authorProfile.photoURL || '';
+            const initials = authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+            const caption = item.caption || '';
+            const expiresAt = item.expiresAt ? new Date(item.expiresAt.toDate()) : new Date();
+            const createdAt = item.createdAt ? new Date(item.createdAt.toDate()) : null;
+            const now = new Date();
+            const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+            const isUrgent = daysLeft <= 1;
+            const hasMulti = imageUrls.length > 1;
 
-                const imgEl = document.getElementById('hlDetailImage');
-                if (mainImage) { imgEl.src = mainImage; imgEl.style.display = 'block'; }
-                else { imgEl.src = ''; imgEl.style.display = 'none'; }
+            const imgEl = document.getElementById('hlDetailImage');
+            if (mainImage) {
+                imgEl.src = mainImage;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.src = '';
+                imgEl.style.display = 'none';
+            }
 
-                const multiBadge = document.getElementById('hlDetailMultiBadge');
-                if (hasMulti) {
-                    document.getElementById('hlDetailMultiCount').textContent = imageUrls.length;
-                    multiBadge.style.display = 'inline-flex';
-                } else multiBadge.style.display = 'none';
+            const multiBadge = document.getElementById('hlDetailMultiBadge');
+            if (hasMulti) {
+                document.getElementById('hlDetailMultiCount').textContent = imageUrls.length;
+                multiBadge.style.display = 'inline-flex';
+            } else {
+                multiBadge.style.display = 'none';
+            }
 
-                const avatarEl = document.getElementById('hlDetailAvatar');
-                if (authorPhoto) {
-                    avatarEl.innerHTML = `<img src="${cloudinaryThumb(authorPhoto, 120)}" alt="${escapeAttr(authorName)}" />`;
-                } else avatarEl.textContent = initials;
+            const avatarEl = document.getElementById('hlDetailAvatar');
+            if (authorPhoto) {
+                avatarEl.innerHTML = `<img src="${cloudinaryAvatar(authorPhoto, 160)}" alt="${escapeAttr(authorName)}" />`;
+            } else {
+                avatarEl.textContent = initials;
+            }
 
-                document.getElementById('hlDetailAuthor').textContent = authorName;
-                document.getElementById('hlDetailTime').textContent = createdAt ? `Posted ${formatRelativeTime(createdAt)}` : 'Posted recently';
-                document.getElementById('hlDetailCaption').textContent = caption || 'No caption';
+            document.getElementById('hlDetailAuthor').textContent = authorName;
+            document.getElementById('hlDetailTime').textContent = createdAt ? `Posted ${formatRelativeTime(createdAt)}` : 'Posted recently';
+            document.getElementById('hlDetailCaption').textContent = caption || 'No caption';
 
-                const detailBarHost = document.getElementById('hlDetailReactionsBar');
-                if (detailBarHost) {
-                    detailBarHost.outerHTML = renderHighlightDetailReactionBar(highlightId);
-                }
+            // Render reactions bar in the detail modal
+            const detailBarHost = document.getElementById('hlDetailReactionsBar');
+            if (detailBarHost) {
+                detailBarHost.outerHTML = renderHighlightDetailReactionBar(highlightId);
+            }
 
-                document.getElementById('hlDetailPhotoCount').innerHTML =
-                    `<i class="fas fa-images"></i> <span>${imageUrls.length} photo${imageUrls.length !== 1 ? 's' : ''}</span>`;
-                const expiryEl = document.getElementById('hlDetailExpiry');
-                expiryEl.innerHTML = `<i class="fas fa-clock"></i> <span>${daysLeft} day${daysLeft !== 1 ? 's' : ''} left</span>`;
-                expiryEl.classList.toggle('urgent', isUrgent);
+            document.getElementById('hlDetailPhotoCount').innerHTML =
+                `<i class="fas fa-images"></i> <span>${imageUrls.length} photo${imageUrls.length !== 1 ? 's' : ''}</span>`;
+            const expiryEl = document.getElementById('hlDetailExpiry');
+            expiryEl.innerHTML = `<i class="fas fa-clock"></i> <span>${daysLeft} day${daysLeft !== 1 ? 's' : ''} left</span>`;
+            expiryEl.classList.toggle('urgent', isUrgent);
 
-                const downloadBtn = document.getElementById('hlDetailDownloadBtn');
-                const viewAllBtn = document.getElementById('hlDetailViewAllBtn');
+            const downloadBtn = document.getElementById('hlDetailDownloadBtn');
+            const fullViewBtn = document.getElementById('hlDetailFullViewBtn');
+            const viewAllBtn = document.getElementById('hlDetailViewAllBtn');
 
-                if (imageUrls.length > 0) {
-                    downloadBtn.disabled = false;
-                    downloadBtn.innerHTML = hasMulti ? '<i class="fas fa-download"></i> Download This' : '<i class="fas fa-download"></i> Download';
-                } else {
-                    downloadBtn.disabled = true;
-                    downloadBtn.innerHTML = '<i class="fas fa-ban"></i> No photo';
-                }
+            if (imageUrls.length > 0) {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
+                fullViewBtn.style.display = 'inline-flex';
+            } else {
+                downloadBtn.disabled = true;
+                downloadBtn.innerHTML = '<i class="fas fa-ban"></i> No photo';
+                fullViewBtn.style.display = 'none';
+            }
 
-                if (hasMulti) viewAllBtn.style.display = 'inline-flex';
-                else viewAllBtn.style.display = 'none';
+            if (hasMulti) {
+                viewAllBtn.style.display = 'inline-flex';
+            } else {
+                viewAllBtn.style.display = 'none';
+            }
 
-                const fullViewBtn = document.getElementById('hlDetailFullViewBtn');
-                if (fullViewBtn) {
-                    if (imageUrls.length > 0) {
-                        fullViewBtn.style.display = 'inline-flex';
-                    } else {
-                        fullViewBtn.style.display = 'none';
-                    }
-                }
+            renderHighlightCommentsSection(highlightId);
 
-                const deleteBtn = document.getElementById('hlDetailDeleteBtn');
-                const isOwner = currentUser && item.authorUid === currentUser.uid;
-                const isAdmin = titaUserData && titaUserData.isAdmin === true;
-                if (isOwner || isAdmin) {
-                    deleteBtn.style.display = 'inline-flex';
-                } else {
-                    deleteBtn.style.display = 'none';
-                }
-
-                renderHighlightCommentsSection(highlightId);
-
-                document.getElementById('highlightDetailModal').classList.add('active');
-                document.body.style.overflow = 'hidden';
-                syncModalOpenState();
-            }).catch(err => {
-                console.error('openHighlightDetail error:', err);
-                showToast('Could not load highlight.', 'error');
-            });
+            document.getElementById('highlightDetailModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            syncModalOpenState();
         }
 
         function closeHighlightDetail() {
             detachHighlightCommentsListener();
             currentHighlightReplyTo = null;
+            highlightPendingMentions.clear();
+            closeHighlightMentionDropdown();
             document.querySelectorAll('.highlight-detail-modal .hl-reaction-picker.show, .hl-reaction-picker--modal.show')
                 .forEach(p => {
                     p.classList.remove('show');
@@ -7041,43 +7009,32 @@
 
         async function downloadCurrentHighlightDetail() {
             if (!currentHighlightDetailId) return;
+            const item = highlightsData.find(h => h.id === currentHighlightDetailId);
+            if (!item || !item.imageURLs || !item.imageURLs.length) return;
+
+            const url = item.imageURLs[currentHighlightDetailImageIndex] || item.imageURLs[0];
+            const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
+            const ext = extFromUrl(url);
+            const filename = `TAMAWO_${safeAuthor}_photo_${currentHighlightDetailImageIndex + 1}.${ext}`;
             try {
-                const doc = await db.collection('highlights').doc(currentHighlightDetailId).get();
-                if (!doc.exists) return;
-                const item = doc.data();
-                if (!item.imageURLs || !item.imageURLs.length) return;
-                const url = item.imageURLs[currentHighlightDetailImageIndex] || item.imageURLs[0];
-                const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
-                const ext = extFromUrl(url);
-                const filename = `TAMAWO_${safeAuthor}_photo_${currentHighlightDetailImageIndex + 1}.${ext}`;
                 await downloadImage(url, filename);
-            } catch (err) { showToast('Failed to download: ' + err.message, 'error'); }
+            } catch (err) {
+                window.open(url, '_blank', 'noopener');
+            }
         }
 
-        async function fullViewCurrentHighlightDetail() {
+        function fullViewCurrentHighlightDetail() {
             if (!currentHighlightDetailId) return;
-            try {
-                const doc = await db.collection('highlights').doc(currentHighlightDetailId).get();
-                if (!doc.exists) {
-                    showToast('This highlight no longer exists.', 'warn');
-                    return;
-                }
-                const item = doc.data();
-                if (!item.imageURLs || !item.imageURLs.length) {
-                    showToast('No image available to view.', 'warn');
-                    return;
-                }
-
-                const images = item.imageURLs;
-                const startIdx = currentHighlightDetailImageIndex || 0;
-                const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
-
-                openFullView(images[startIdx], `TAMAWO_${safeAuthor}_photo_${startIdx + 1}.${extFromUrl(images[startIdx])}`,
-                    images, startIdx, 'highlight');
-            } catch (err) {
-                console.error('fullViewCurrentHighlightDetail error:', err);
-                showToast('Could not load image.', 'error');
-            }
+            const item = highlightsData.find(h => h.id === currentHighlightDetailId);
+            if (!item || !item.imageURLs || !item.imageURLs.length) return;
+            const images = item.imageURLs;
+            const startIdx = currentHighlightDetailImageIndex || 0;
+            const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
+            const ext = extFromUrl(images[startIdx] || images[0]);
+            // ★ Pass the full array + starting index + 'highlight' context
+            openFullView(images[startIdx] || images[0],
+                `TAMAWO_${safeAuthor}_photo_${startIdx + 1}.${ext}`,
+                images, startIdx, 'highlight');
         }
 
         function viewAllFromHighlightDetail() {
@@ -7087,158 +7044,97 @@
             setTimeout(() => openGallery(id), 180);
         }
 
-        async function deleteCurrentHighlightDetail() {
-            if (!currentHighlightDetailId) return;
-            const id = currentHighlightDetailId;
-            closeHighlightDetail();
-            await deleteHighlight(id);
-        }
+        function openGallery(highlightId) {
+            const item = highlightsData.find(h => h.id === highlightId);
+            if (!item) return;
 
-        // ================================================================
-        // ===== GALLERY =====
-        // ================================================================
-        async function openGallery(id) {
-            currentGalleryId = id;
-            const grid = document.getElementById('galleryGrid');
+            currentGalleryImages = item.imageURLs || [];
+            currentGalleryCaption = item.caption || '';
+            currentGalleryAuthor = item.authorName || 'Someone';
+
+            const titleText = document.getElementById('galleryTitleText');
             const subtitle = document.getElementById('gallerySubtitle');
             const captionEl = document.getElementById('galleryCaption');
-
-            document.getElementById('galleryModal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-            syncModalOpenState();
-            grid.innerHTML = `<div class="gallery-loading"><span class="spinner"></span><p style="margin-top:10px;font-size:13px;">Loading photos…</p></div>`;
-
-            try {
-                const doc = await db.collection('highlights').doc(id).get();
-                if (!doc.exists) { closeGallery(); showToast('This highlight no longer exists.', 'warn'); return; }
-                const data = doc.data();
-                currentGalleryImages = data.imageURLs || [];
-                currentGalleryCaption = data.caption || '';
-                currentGalleryAuthor = data.authorName || 'Someone';
-
-                subtitle.textContent = `(${currentGalleryImages.length} photo${currentGalleryImages.length !== 1 ? 's' : ''} · by ${currentGalleryAuthor})`;
-
-                if (currentGalleryCaption) {
-                    captionEl.style.display = 'block';
-                    captionEl.innerHTML = `<strong>${escapeHtml(currentGalleryAuthor)}:</strong> ${escapeHtml(currentGalleryCaption)}`;
-                } else captionEl.style.display = 'none';
-
-                if (currentGalleryImages.length === 0) {
-                    grid.innerHTML = `<div class="gallery-loading"><p style="font-size:14px;color:#888;">No photos in this highlight.</p></div>`;
-                    return;
-                }
-
-                renderGalleryGrid();
-            } catch (err) {
-                grid.innerHTML = `<div class="gallery-loading"><p style="color:#dc2626;">Failed to load photos.</p></div>`;
-            }
-        }
-
-        function renderGalleryGrid() {
             const grid = document.getElementById('galleryGrid');
+
+            titleText.textContent = `${currentGalleryAuthor}'s Highlight`;
+            subtitle.textContent = `${currentGalleryImages.length} photo${currentGalleryImages.length !== 1 ? 's' : ''}`;
+
+            if (currentGalleryCaption) {
+                captionEl.classList.add('show');
+                captionEl.innerHTML = `<strong>${escapeHtml(currentGalleryAuthor)}:</strong> ${escapeHtml(currentGalleryCaption)}`;
+            } else {
+                captionEl.classList.remove('show');
+                captionEl.innerHTML = '';
+            }
+
             let html = '';
             currentGalleryImages.forEach((url, index) => {
-                const thumb = cloudinaryThumb(url, 500);
                 html += `
                     <div class="gallery-item">
-                        <img src="${thumb}" alt="Photo ${index + 1}" loading="lazy" decoding="async"
-                             onclick="openLightbox('${escapeJs(url)}', ${index})" />
+                        <img src="${cloudinaryThumb(url, 600)}" alt="Photo ${index + 1}" loading="lazy" decoding="async" />
+                        <button class="gallery-fullview-btn" title="View full image" onclick="fullViewGalleryImage(${index})"><i class="fas fa-search-plus"></i></button>
+                        <button class="gallery-download-btn" title="Download this photo" onclick="downloadGalleryImage(${index})"><i class="fas fa-download"></i></button>
                         <span class="image-index">${index + 1}</span>
-                        <div class="item-actions">
-                            <button class="gallery-fullview" title="View full" onclick="event.stopPropagation(); fullViewGalleryImage(${index})">
-                                <i class="fas fa-search-plus"></i>
-                            </button>
-                            <button class="gallery-download" title="Download" onclick="event.stopPropagation(); downloadGalleryImage(${index})">
-                                <i class="fas fa-download"></i>
-                            </button>
-                            <button class="gallery-delete" title="Delete this photo" onclick="event.stopPropagation(); deleteGalleryImage(${index})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
                     </div>
                 `;
             });
             grid.innerHTML = html;
+
+            const dlAllBtn = document.getElementById('galleryDownloadAllBtn');
+            dlAllBtn.style.display = currentGalleryImages.length > 1 ? 'inline-flex' : 'none';
+
+            document.getElementById('galleryModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            syncModalOpenState();
+        }
+
+        function closeGallery() {
+            document.getElementById('galleryModal').classList.remove('active');
+            if (!anyModalOpen()) document.body.style.overflow = 'auto';
+            currentGalleryImages = [];
+            currentGalleryCaption = '';
+            currentGalleryAuthor = '';
+            document.getElementById('galleryGrid').innerHTML = '';
+            syncModalOpenState();
         }
 
         function fullViewGalleryImage(index) {
             const url = currentGalleryImages[index];
             if (!url) return;
             const safeAuthor = sanitizeFilename(currentGalleryAuthor);
-
-            openFullView(url, `TAMAWO_${safeAuthor}_photo_${index + 1}.${extFromUrl(url)}`,
+            const ext = extFromUrl(url);
+            // ★ Pass the full gallery array + starting index + 'gallery' context
+            openFullView(url, `TAMAWO_${safeAuthor}_photo_${index + 1}.${ext}`,
                 currentGalleryImages, index, 'gallery');
-        }
-
-        function closeGallery() {
-            document.getElementById('galleryModal').classList.remove('active');
-            if (!document.getElementById('lightboxModal').classList.contains('active')) {
-                document.body.style.overflow = 'auto';
-            }
-            currentGalleryId = null;
-            currentGalleryImages = [];
-            currentGalleryCaption = '';
-            currentGalleryAuthor = '';
-            syncModalOpenState();
         }
 
         async function downloadGalleryImage(index) {
             const url = currentGalleryImages[index];
             if (!url) return;
+            const safeAuthor = sanitizeFilename(currentGalleryAuthor);
+            const ext = extFromUrl(url);
+            const filename = `TAMAWO_${safeAuthor}_photo_${index + 1}.${ext}`;
             try {
-                await downloadImage(url, `TAMAWO_${currentGalleryId}_photo_${index + 1}.jpg`);
-            } catch (err) { showToast('Failed to download: ' + err.message, 'error'); }
-        }
-
-        async function deleteGalleryImage(index) {
-            if (!currentGalleryId) return;
-            const url = currentGalleryImages[index];
-            if (!url) return;
-            showConfirm({
-                title: 'Delete this photo?',
-                message: 'This photo will be removed from the highlight. This cannot be undone.',
-                confirmLabel: 'Delete',
-                type: 'danger',
-                onConfirm: async () => {
-                    try {
-                        const hlDoc = await db.collection('highlights').doc(currentGalleryId).get();
-                        const hlData = hlDoc.exists ? hlDoc.data() : {};
-                        const publicIds = hlData.imagePublicIds || [];
-                        const pid = publicIds[index] || null;
-
-                        if (url.includes('cloudinary')) await deleteFromCloudinary(url, pid);
-                        const newImages = currentGalleryImages.filter((_, i) => i !== index);
-                        const newPublicIds = publicIds.filter((_, i) => i !== index);
-                        if (newImages.length === 0) {
-                            await db.collection('highlights').doc(currentGalleryId).delete();
-                            closeGallery();
-                            showToast('Last photo deleted — highlight removed.', 'success');
-                            return;
-                        }
-                        await db.collection('highlights').doc(currentGalleryId).update({
-                            imageURLs: newImages,
-                            imagePublicIds: newPublicIds
-                        });
-                        currentGalleryImages = newImages;
-                        document.getElementById('gallerySubtitle').textContent =
-                            `(${newImages.length} photo${newImages.length !== 1 ? 's' : ''} · by ${currentGalleryAuthor})`;
-                        renderGalleryGrid();
-                        showToast('Photo deleted', 'success', 2000);
-                    } catch (err) { showToast('Failed to delete photo: ' + err.message, 'error'); }
-                }
-            });
+                await downloadImage(url, filename);
+            } catch (err) {
+                window.open(url, '_blank', 'noopener');
+            }
         }
 
         async function downloadAllGalleryImages() {
             if (currentGalleryImages.length === 0) return;
+
             const btn = document.getElementById('galleryDownloadAllBtn');
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Zipping...';
+
             try {
                 const zip = new JSZip();
                 const safeAuthor = sanitizeFilename(currentGalleryAuthor);
                 const folder = zip.folder(`TAMAWO_${safeAuthor}`);
+
                 for (let i = 0; i < currentGalleryImages.length; i++) {
                     const url = currentGalleryImages[i];
                     try {
@@ -7246,375 +7142,74 @@
                         const blob = await response.blob();
                         const ext = (blob.type.split('/')[1] || extFromUrl(url)).split('+')[0];
                         folder.file(`photo_${i + 1}.${ext}`, blob);
-                    } catch (e) {}
+                    } catch (e) {
+                        console.warn('Failed to fetch image for zip:', e);
+                    }
                 }
+
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 const date = new Date().toISOString().slice(0, 10);
                 saveAs(zipBlob, `TAMAWO_${safeAuthor}_${date}.zip`);
-                showToast('ZIP downloaded', 'success', 2000);
-            } catch (err) { showToast('Error creating ZIP: ' + err.message, 'error'); }
-            finally { btn.disabled = false; btn.innerHTML = originalHtml; }
-        }
-
-        // ================================================================
-        // ===== LIGHTBOX =====
-        // ================================================================
-        function openLightbox(url, index) {
-            currentLightboxUrl = url;
-            currentLightboxIndex = index;
-            document.getElementById('lightboxImage').src = url;
-            document.getElementById('lightboxModal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-            syncModalOpenState();
-        }
-
-        function closeLightbox() {
-            document.getElementById('lightboxModal').classList.remove('active');
-            document.getElementById('lightboxImage').src = '';
-            currentLightboxUrl = '';
-            if (!document.getElementById('galleryModal').classList.contains('active')) {
-                document.body.style.overflow = 'auto';
+            } catch (err) {
+                console.error('ZIP error:', err);
+                showToast('Error creating ZIP: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
             }
-            syncModalOpenState();
         }
 
-        async function downloadCurrentLightboxImage() {
-            if (!currentLightboxUrl) return;
-            try { await downloadImage(currentLightboxUrl, `TAMAWO_photo_${currentLightboxIndex + 1}.jpg`); }
-            catch (err) { showToast('Failed to download: ' + err.message, 'error'); }
-        }
+        function loadMembersFromFirestore() {
+            const grid = document.getElementById('membersGrid');
+            const countDisplay = document.getElementById('memberCountDisplay');
 
-        // ================================================================
-        // ===== SELECTION MODE =====
-        // ================================================================
-        function toggleSelectionMode() {
-            selectionMode = !selectionMode;
-            document.body.classList.toggle('selection-mode-active', selectionMode);
-            document.getElementById('batchDownloadBtn').style.display = selectionMode ? 'inline-flex' : 'none';
-            document.getElementById('batchDeleteBtn').style.display = selectionMode ? 'inline-flex' : 'none';
+            if (unsubscribeMembers) unsubscribeMembers();
 
-            if (!selectionMode) {
-                selectedHighlights.clear();
-                updateSelectionUI();
-            }
-
-            const selectBtn = document.querySelector('.btn-secondary[onclick="toggleSelectionMode()"]');
-            if (selectBtn) {
-                selectBtn.innerHTML = selectionMode
-                    ? '<i class="fas fa-times"></i> Deselect'
-                    : '<i class="fas fa-check-square"></i> Select';
-            }
-
-            document.getElementById('selectionInfo').textContent = selectionMode ? 'Select highlights to download or delete' : '';
-            refreshHighlights();
-        }
-
-        function updateSelectionUI() {
-            document.getElementById('selectionInfo').textContent = selectionMode ?
-                `${selectedHighlights.size} selected` : '';
-        }
-
-        function refreshHighlights() {
-            document.querySelectorAll('.highlights-carousel-item').forEach(card => {
-                const id = card.dataset.highlightId;
-                if (selectedHighlights.has(id)) card.classList.add('selected');
-                else card.classList.remove('selected');
-            });
-        }
-
-        function toggleHighlightSelection(id) {
-            if (!selectionMode) return;
-            if (selectedHighlights.has(id)) {
-                selectedHighlights.delete(id);
-            } else {
-                selectedHighlights.add(id);
-            }
-            refreshHighlights();
-            updateSelectionUI();
-        }
-
-        async function batchDelete() {
-            if (selectedHighlights.size === 0) { showToast('Please select at least one highlight to delete.', 'warn'); return; }
-
-            showConfirm({
-                title: `Delete ${selectedHighlights.size} highlight${selectedHighlights.size !== 1 ? 's' : ''}?`,
-                message: 'This action cannot be undone. All images and comments will be permanently removed.',
-                confirmLabel: 'Delete all',
-                type: 'danger',
-                onConfirm: async () => {
-                    try {
-                        const idsToDelete = [...selectedHighlights];
-                        let deletedCount = 0;
-                        for (const id of idsToDelete) {
-                            const doc = await db.collection('highlights').doc(id).get();
-                            if (!doc.exists) continue;
-                            const data = doc.data();
-                            const isOwner = currentUser && data.authorUid === currentUser.uid;
-                            const isAdmin = titaUserData && titaUserData.isAdmin === true;
-                            if (!isOwner && !isAdmin) {
-                                showToast('Skipped a highlight — only the owner or admin can delete it.', 'warn');
-                                continue;
-                            }
-
-                            const imageUrls = data?.imageURLs || [];
-                            const publicIds = data?.imagePublicIds || [];
-                            for (let i = 0; i < imageUrls.length; i++) {
-                                const url = imageUrls[i];
-                                const pid = publicIds[i];
-                                if (url && url.includes('cloudinary')) await deleteFromCloudinary(url, pid);
-                            }
-                            await db.collection('highlights').doc(id).delete();
-                            try {
-                                const commentsSnap = await db.collection('highlightComments')
-                                    .where('highlightId', '==', id).get();
-                                if (!commentsSnap.empty) {
-                                    const batch = db.batch();
-                                    commentsSnap.forEach(d => batch.delete(d.ref));
-                                    await batch.commit();
-                                }
-                            } catch (e) {}
-                            try {
-                                const reactionsSnap = await db.collection('highlights').doc(id)
-                                    .collection('reactions').get();
-                                if (!reactionsSnap.empty) {
-                                    const batch = db.batch();
-                                    reactionsSnap.forEach(d => batch.delete(d.ref));
-                                    await batch.commit();
-                                }
-                            } catch (e) {}
-                            detachHighlightReactionsListener(id);
-                            delete highlightReactionsCache[id];
-                            selectedHighlights.delete(id);
-                            deletedCount++;
-                        }
-                        showToast(`${deletedCount} highlight${deletedCount !== 1 ? 's' : ''} deleted`, 'success');
-                        toggleSelectionMode();
-                    } catch (error) { showToast('Error deleting highlights: ' + error.message, 'error'); }
-                }
-            });
-        }
-
-        async function batchDownload() {
-            if (selectedHighlights.size === 0) { showToast('Please select at least one highlight to download.', 'warn'); return; }
-            const zip = new JSZip();
-            const folder = zip.folder('TAMAWO_Highlights');
-            let downloadCount = 0;
-            try {
-                for (const id of selectedHighlights) {
-                    const doc = await db.collection('highlights').doc(id).get();
-                    const data = doc.data();
-                    const imageUrls = data?.imageURLs || [];
-                    for (const url of imageUrls) {
-                        if (url) {
-                            try {
-                                const response = await fetch(url);
-                                const blob = await response.blob();
-                                const extension = blob.type.split('/')[1] || 'jpg';
-                                folder.file(`highlight_${id}_${downloadCount + 1}.${extension}`, blob);
-                                downloadCount++;
-                            } catch (e) {}
-                        }
-                    }
-                }
-                if (downloadCount === 0) { showToast('No images to download.', 'warn'); return; }
-                const zipBlob = await zip.generateAsync({ type: 'blob' });
-                saveAs(zipBlob, `TAMAWO_Highlights_${new Date().toISOString().slice(0,10)}.zip`);
-                showToast(`Downloaded ${downloadCount} images`, 'success');
-                toggleSelectionMode();
-            } catch (error) { showToast('Error downloading: ' + error.message, 'error'); }
-        }
-
-        // ================================================================
-        // ===== UPLOAD =====
-        // ================================================================
-        async function uploadToCloudinary(file, expiryDateStr) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
-            formData.append('folder', 't-amawo/highlights');
-
-            const uniqueSuffix = Math.random().toString(36).slice(2, 10);
-            const customPublicId = `exp_${expiryDateStr}_${uniqueSuffix}`;
-            formData.append('public_id', customPublicId);
-            formData.append('tags', `expires_${expiryDateStr},highlight`);
-
-            return new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`);
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        const json = JSON.parse(xhr.responseText);
-                        resolve({
-                            secure_url: json.secure_url,
-                            public_id: json.public_id
-                        });
-                    } else {
-                        reject(new Error('Upload failed: ' + xhr.statusText));
-                    }
-                };
-                xhr.onerror = function() { reject(new Error('Network error')); };
-                xhr.send(formData);
-            });
-        }
-
-        function showUploadModal() {
-            document.getElementById('uploadModal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-            syncModalOpenState();
-            selectedFiles = [];
-            document.getElementById('fileList').innerHTML = '';
-            document.getElementById('fileInput').value = '';
-            document.getElementById('captionInput').value = '';
-        }
-
-        function closeUploadModal() {
-            document.getElementById('uploadModal').classList.remove('active');
-            document.body.style.overflow = 'auto';
-            selectedFiles = [];
-            document.getElementById('fileList').innerHTML = '';
-            document.getElementById('fileInput').value = '';
-            syncModalOpenState();
-        }
-
-        const _uploadAreaEl = document.getElementById('uploadArea');
-        if (_uploadAreaEl) {
-            _uploadAreaEl.addEventListener('click', function() {
-                document.getElementById('fileInput').click();
-            });
-        }
-
-        const _fileInputEl = document.getElementById('fileInput');
-        if (_fileInputEl) {
-            _fileInputEl.addEventListener('change', function(e) {
-                const files = Array.from(e.target.files);
-                const remaining = 10 - selectedFiles.length;
-                if (files.length > remaining) {
-                    showToast(`You can only select ${remaining} more file${remaining > 1 ? 's' : ''}`, 'warn');
-                    return;
-                }
-                selectedFiles = [...selectedFiles, ...files.slice(0, remaining)];
-                updateFileList();
-            });
-        }
-
-        function updateFileList() {
-            const container = document.getElementById('fileList');
-            if (!container) return;                       // guard — only exists on dashboard.html
-            if (selectedFiles.length === 0) { container.innerHTML = ''; return; }
-            let html = '';
-            selectedFiles.forEach((file, index) => {
-                html += `
-                    <div class="file-item">
-                        <span><i class="fas fa-image"></i> ${escapeHtml(file.name)} (${Math.round(file.size / 1024)}KB)</span>
-                        <button class="remove-file" onclick="removeFile(${index})"><i class="fas fa-times"></i></button>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-        }
-
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            updateFileList();
-        }
-
-        const _uploadFormEl = document.getElementById('uploadForm');
-        if (_uploadFormEl) {
-            _uploadFormEl.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                if (selectedFiles.length === 0) { showToast('Please select at least one photo', 'warn'); return; }
-
-                const caption = document.getElementById('captionInput').value.trim();
-                const submitBtn = document.getElementById('uploadBtn');
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<span class="spinner"></span> Uploading...';
-
-                try {
-                    const user = auth.currentUser;
-                    const userDoc = await db.collection('users').doc(user.uid).get();
-                    const userData = userDoc.data();
-                    const authorName = userData?.displayName || user.displayName || user.email || 'Someone';
-
-                    const expiresAt = new Date();
-                    expiresAt.setDate(expiresAt.getDate() + HIGHLIGHT_EXPIRY_DAYS);
-                    const expiryDateStr = expiresAt.toISOString().slice(0, 10);
-
-                    const imageUrls = [];
-                    const imagePublicIds = [];
-
-                    for (const file of selectedFiles) {
-                        try {
-                            const result = await uploadToCloudinary(file, expiryDateStr);
-                            imageUrls.push(result.secure_url);
-                            imagePublicIds.push(result.public_id);
-                        } catch (err) {
-                            showToast(`Failed to upload ${file.name}: ${err.message}`, 'error');
-                            submitBtn.disabled = false;
-                            submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload';
-                            return;
-                        }
+            unsubscribeMembers = db.collection('users')
+                .orderBy('displayName', 'asc')
+                .limit(MEMBERS_LIMIT)
+                .onSnapshot((snapshot) => {
+                    if (snapshot.empty) {
+                        grid.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-users"></i>
+                                <h3>No Members Yet</h3>
+                                <p>Be the first to join!</p>
+                            </div>
+                        `;
+                        countDisplay.textContent = '0 members';
+                        return;
                     }
 
-                    await db.collection('highlights').add({
-                        imageURLs: imageUrls,
-                        imagePublicIds: imagePublicIds,
-                        imageExpiryTag: `expires_${expiryDateStr}`,
-                        caption: caption,
-                        authorName: authorName,
-                        authorUid: user.uid,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        expiresAt: expiresAt
+                    const count = snapshot.size;
+                    countDisplay.textContent = `${count} amazing member${count !== 1 ? 's' : ''}`;
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        userProfileCache[doc.id] = { id: doc.id, ...data };
+                        carouselItemCache[`users:${doc.id}`] = { id: doc.id, ...data };
                     });
 
-                    closeUploadModal();
-                    showToast(`Highlight uploaded! Expires in ${HIGHLIGHT_EXPIRY_DAYS} days.`, 'success', 4000);
-                } catch (error) { showToast('Error uploading highlight: ' + error.message, 'error'); }
-                finally {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload';
-                }
-            });
+                    renderMembersSection();
+                }, (error) => {
+                    console.error('Error loading members:', error);
+                });
         }
 
-        // ================================================================
-        // ===== HELPERS: LOVE LIFE, STATUS =====
-        // ================================================================
-        function getLoveLifeLabel(value) {
-            switch (value) {
-                case 'Single': return { label: 'Single', icon: 'fa-heart-broken', cls: 'single' };
-                case 'MU': return { label: 'MU', icon: 'fa-heart', cls: 'mu' };
-                case 'Married': return { label: 'Married', icon: 'fa-ring', cls: 'married' };
-                default: return null;
-            }
-        }
-
-        function getStatusLabel(status) {
-            const map = {
-                'available': { label: 'Available', cls: 'available' },
-                'busy': { label: 'Busy', cls: 'busy' },
-                'away': { label: 'Away', cls: 'away' },
-                'dnd': { label: 'Do Not Disturb', cls: 'dnd' },
-                'offline': { label: 'Offline', cls: 'offline' }
-            };
-            return map[status] || map['offline'];
-        }
-
-        // ================================================================
-        // ===== LOAD MEMBERS =====
-        // ================================================================
-        async function loadMembers() {
+        function renderMembersSection() {
             const grid = document.getElementById('membersGrid');
-            try {
-                const snapshot = await db.collection('users')
-                    .orderBy('displayName', 'asc')
-                    .limit(MEMBERS_LIMIT)
-                    .get();
+            const countDisplay = document.getElementById('memberCountDisplay');
+            const nudge = document.getElementById('membersLoginNudge');
 
-                const count = snapshot.size;
-                const countEl = document.getElementById('memberCountDisplay');
-                if (countEl) countEl.textContent = `${sorted.length} member${sorted.length === 1 ? '' : 's'}`;
+            if (!grid) return;
 
-                if (snapshot.empty) {
+            if (nudge) {
+                nudge.style.display = isUserLoggedIn ? 'none' : 'block';
+            }
+
+            const memberKeys = Object.keys(carouselItemCache).filter(k => k.startsWith('users:'));
+            if (memberKeys.length === 0) {
+                if (!grid.querySelector('.empty-state')) {
                     grid.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-users"></i>
@@ -7622,116 +7217,121 @@
                             <p>Be the first to join!</p>
                         </div>
                     `;
-                    return;
                 }
-
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    userProfileCache[doc.id] = { id: doc.id, ...data };
-                });
-
-                renderMembersGridFromCache();
-
-                if (chatFeatureEnabled && chatActiveTabIsSelected()) {
-                    renderChatUserList();
-                }
-            } catch (error) { console.error('Error loading members:', error); }
-        }
-
-        function renderMembersGridFromCache() {
-            const grid = document.getElementById('membersGrid');
-            if (!grid) return;
-
-            const memberIds = Object.keys(userProfileCache);
-            const countEl = document.getElementById('memberCountDisplay');
-
-            if (memberIds.length === 0) {
-                grid.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-users"></i>
-                        <h3>No Members Yet</h3>
-                        <p>Be the first to join!</p>
-                    </div>
-                `;
-                if (countEl) countEl.textContent = '0 members';
+                if (countDisplay) countDisplay.textContent = '0 members';
                 return;
             }
 
-            const sorted = memberIds
-                .map(id => ({ id, ...userProfileCache[id] }))
-                .sort((a, b) => {
-                    const an = (a.displayName || a.email || '').toLowerCase();
-                    const bn = (b.displayName || b.email || '').toLowerCase();
-                    return an.localeCompare(bn);
-                });
+            const members = memberKeys.map(k => carouselItemCache[k]).sort((a, b) => {
+                const an = (a.displayName || a.email || '').toLowerCase();
+                const bn = (b.displayName || b.email || '').toLowerCase();
+                return an.localeCompare(bn);
+            });
 
-            if (countEl) countEl.textContent = `${sorted.length} member${sorted.length === 1 ? '' : 's'}`;
+            if (countDisplay) {
+                countDisplay.textContent = `${members.length} amazing member${members.length !== 1 ? 's' : ''}`;
+            }
 
             let html = '';
-            sorted.forEach(data => {
-                const docId = data.id;
-                const name = data.displayName || data.email || 'Anonymous';
+            members.forEach(member => {
+                const name = member.displayName || member.email || 'Anonymous';
                 const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-                const status = data.status || 'offline';
-                const location = data.location || '📍 Not set';
-                const photoUrl = data.photoURL || '';
-                const bio = data.bio || 'New to the squad! 👋';
-                const occupation = data.occupation || '';
-                const interests = data.interests ? data.interests.split(',').map(t => t.trim()).filter(t => t) : [];
-                const instagram = data.instagram || '';
-                const twitter = data.twitter || '';
-                const tiktok = data.tiktok || '';
-                const facebook = data.facebook || '';
-                const loveLife = data.loveLife || '';
+                const photoUrl = member.photoURL || '';
+                const bio = member.bio || 'New to the squad! 👋';
+                const occupation = member.occupation || '';
+                const interests = member.interests
+                    ? member.interests.split(',').map(t => t.trim()).filter(t => t)
+                    : [];
+                const instagram = member.instagram || '';
+                const twitter = member.twitter || '';
+                const tiktok = member.tiktok || '';
+                const facebook = member.facebook || '';
 
+                const location = member.location || '';
+                const birthdayFormatted = formatBirthday(member.birthday);
+                const status = member.status || 'offline';
                 const statusInfo = getStatusLabel(status);
-                const loveLifeInfo = getLoveLifeLabel(loveLife);
-                const avatarThumb = photoUrl ? cloudinaryThumb(photoUrl, 128) : '';
-                const memberIdSafe = escapeAttr(docId);
+                const loveLifeInfo = getLoveLifeLabel(member.loveLife);
 
-                const note = notesCache[docId];
+                const avatarSrc = photoUrl ? cloudinaryAvatar(photoUrl, 400) : '';
+
+                const avatarContent = photoUrl
+                    ? `<img src="${avatarSrc}"
+                            alt="${escapeAttr(name)}"
+                            loading="lazy"
+                            decoding="async"
+                            onerror="this.parentElement.innerHTML='<span style=\\'font-size:56px;font-weight:800;letter-spacing:2px;\\'>${escapeHtml(initials)}</span>';"
+                       />`
+                    : escapeHtml(initials);
+
+                const hasImage = !!photoUrl;
+                const memberIdSafe = escapeAttr(member.id);
+
+                let metaChipsHtml = '';
+                if (occupation) {
+                    metaChipsHtml += `<span class="member-meta-chip"><i class="fas fa-briefcase"></i> ${escapeHtml(occupation)}</span>`;
+                }
+                if (isUserLoggedIn && birthdayFormatted) {
+                    metaChipsHtml += `<span class="member-meta-chip"><i class="fas fa-birthday-cake"></i> ${escapeHtml(birthdayFormatted)}</span>`;
+                }
+
+                let socialsHtml = '';
+                if (instagram) socialsHtml += `<a href="https://instagram.com/${encodeURIComponent(instagram.replace('@',''))}" target="_blank" rel="noopener" title="Instagram" onclick="event.stopPropagation()"><i class="fab fa-instagram"></i></a>`;
+                if (twitter) socialsHtml += `<a href="https://twitter.com/${encodeURIComponent(twitter.replace('@',''))}" target="_blank" rel="noopener" title="Twitter / X" onclick="event.stopPropagation()"><i class="fab fa-twitter"></i></a>`;
+                if (tiktok) socialsHtml += `<a href="https://tiktok.com/@${encodeURIComponent(tiktok.replace('@',''))}" target="_blank" rel="noopener" title="TikTok" onclick="event.stopPropagation()"><i class="fab fa-tiktok"></i></a>`;
+                if (facebook) socialsHtml += `<a href="${escapeAttr(facebook)}" target="_blank" rel="noopener" title="Facebook" onclick="event.stopPropagation()"><i class="fab fa-facebook"></i></a>`;
+
+                const locationRow = (isUserLoggedIn && location)
+                    ? `<div class="member-location"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(location)}</div>`
+                    : `<div class="member-location" style="visibility:hidden;height:0;overflow:hidden;">placeholder</div>`;
+
+                const loveLifeRow = (isUserLoggedIn && loveLifeInfo)
+                    ? `<div class="lovelife-badge ${loveLifeInfo.cls}"><i class="fas ${loveLifeInfo.icon}"></i> ${loveLifeInfo.label}</div>`
+                    : '';
+
+                const lockHint = !isUserLoggedIn
+                    ? `<div class="member-locked-hint"><i class="fas fa-lock"></i> Sign in to see more</div>`
+                    : '';
+
+                const note = notesCache[member.id];
                 let noteBubbleHtml = '';
                 if (note && note.text) {
                     const expireAt = note.expireAt
                         ? (note.expireAt.seconds ? new Date(note.expireAt.seconds * 1000) : new Date(note.expireAt))
                         : null;
                     const isExpiringSoon = expireAt && (expireAt - new Date()) < 2 * 60 * 60 * 1000;
-                    const commentCount = noteCommentCounts[docId] || 0;
+                    const commentCount = noteCommentCounts[member.id] || 0;
+
                     noteBubbleHtml = `
-                        <div class="note-bubble" data-note-uid="${memberIdSafe}" onclick="event.stopPropagation(); openNoteModal('${memberIdSafe}')">
+                        <div class="member-note-bubble" data-note-uid="${escapeAttr(member.id)}" onclick="event.stopPropagation(); openNoteModal('${escapeAttr(member.id)}')" title="Tap to read full note${isUserLoggedIn && commentCount > 0 ? ' and replies' : ''}">
                             <i class="fas fa-comment-dots"></i>
-                            <span>${escapeHtml(note.text)}</span>
-                            ${isExpiringSoon ? '<i class="fas fa-hourglass-half" style="color:#ef4444;font-size:10px;"></i>' : ''}
-                            ${commentCount > 0 ? `<span class="note-comment-count"><i class="fas fa-comment"></i> ${commentCount}</span>` : ''}
+                            <span class="note-text-preview">${escapeHtml(note.text)}</span>
+                            ${isExpiringSoon ? '<i class="fas fa-hourglass-half" style="color:#ef4444;font-size:11px;"></i>' : ''}
+                            ${isUserLoggedIn && commentCount > 0 ? `<span class="note-comment-count"><i class="fas fa-comment"></i> ${commentCount}</span>` : ''}
                         </div>
                     `;
                 }
 
                 html += `
                     <div class="member-card" data-member-id="${memberIdSafe}">
-                        <div class="card-top">
-                            <div class="avatar">
-                                ${avatarThumb ? `<img src="${avatarThumb}" alt="${escapeAttr(name)}" loading="lazy" decoding="async" />` : escapeHtml(initials)}
-                            </div>
-                            <div class="name-section">
-                                <div class="name">${escapeHtml(name)}</div>
-                                <div class="location"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(location)}</div>
-                                ${occupation ? `<div class="occupation"><i class="fas fa-briefcase"></i> ${escapeHtml(occupation)}</div>` : ''}
-                                ${loveLifeInfo ? `<div class="lovelife-badge ${loveLifeInfo.cls}"><i class="fas ${loveLifeInfo.icon}"></i> ${loveLifeInfo.label}</div>` : ''}
-                            </div>
-                            <div class="status-wrapper">
-                                <span class="status-dot ${status}"></span>
-                                <span class="status-label">${statusInfo.label}</span>
+                        <div class="avatar-container">
+                            ${noteBubbleHtml}
+                            ${isUserLoggedIn ? `<span class="avatar-status ${status}" title="${statusInfo.label}"></span>` : ''}
+                            <div class="avatar-circle">${avatarContent}</div>
+                            <div class="member-actions">
+                                <button class="member-view" title="View profile" onclick="event.stopPropagation(); openMemberModal('${memberIdSafe}')"><i class="fas fa-expand"></i></button>
+                                ${hasImage ? `<button class="member-download" title="Download profile picture" onclick="event.stopPropagation(); quickDownloadMemberAvatar('${memberIdSafe}')"><i class="fas fa-download"></i></button>` : ''}
                             </div>
                         </div>
-                        ${noteBubbleHtml}
-                        ${bio ? `<div class="bio">${escapeHtml(bio)}</div>` : ''}
-                        ${interests.length ? `<div class="interests">${interests.map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-                        <div class="social-icons">
-                            ${instagram ? `<a href="https://instagram.com/${encodeURIComponent(instagram.replace('@',''))}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="fab fa-instagram"></i></a>` : ''}
-                            ${twitter ? `<a href="https://twitter.com/${encodeURIComponent(twitter.replace('@',''))}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="fab fa-twitter"></i></a>` : ''}
-                            ${tiktok ? `<a href="https://tiktok.com/@${encodeURIComponent(tiktok.replace('@',''))}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="fab fa-tiktok"></i></a>` : ''}
-                            ${facebook ? `<a href="${escapeAttr(facebook)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="fab fa-facebook"></i></a>` : ''}
+                        <div class="member-body">
+                            <div class="member-name">${escapeHtml(name)}</div>
+                            ${locationRow}
+                            ${metaChipsHtml ? `<div class="member-meta-chips">${metaChipsHtml}</div>` : ''}
+                            ${loveLifeRow}
+                            <div class="member-bio">${escapeHtml(bio)}</div>
+                            ${interests.length ? `<div class="member-interests">${interests.map(t => `<span class="interest-tag">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+                            ${socialsHtml ? `<div class="member-socials">${socialsHtml}</div>` : ''}
+                            ${lockHint}
                         </div>
                     </div>
                 `;
@@ -7741,281 +7341,421 @@
 
             grid.querySelectorAll('.member-card').forEach(card => {
                 card.addEventListener('click', function() {
-                    openMemberDetail(this.dataset.memberId);
+                    openMemberModal(this.dataset.memberId);
                 });
             });
         }
 
-        // ================================================================
-        // ===== MEMBER DETAIL =====
-        // ================================================================
-        function openMemberDetail(memberId) {
-            const data = userProfileCache[memberId];
-            if (!data) { showToast('Member not found.', 'warn'); return; }
-            currentMemberDetail = { id: memberId, ...data };
+        async function quickDownloadMemberAvatar(memberId) {
+            const member = carouselItemCache[`users:${memberId}`];
+            if (!member || !member.photoURL) return;
+            const prev = currentMember;
+            currentMember = member;
+            await downloadCurrentMemberAvatar();
+            currentMember = prev;
+        }
 
-            const name = data.displayName || data.email || 'Anonymous';
-            const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-            const photoUrl = data.photoURL || '';
+        function startAutoplay(id) {
+            const carousel = carousels[id];
+            if (!carousel || carousel.totalSlides <= 1) return;
+            if (carousel.interval) clearInterval(carousel.interval);
+            carousel.interval = setInterval(() => moveCarousel(id, 1), CAROUSEL_AUTOPLAY_MS);
+        }
 
-            const avatarEl = document.getElementById('memberDetailAvatar');
-            if (photoUrl) {
-                avatarEl.innerHTML = `<img src="${cloudinaryAvatar(photoUrl, 320)}" alt="${escapeAttr(name)}" />`;
-            } else {
-                avatarEl.innerHTML = `<span id="memberDetailInitials">${escapeHtml(initials)}</span>`;
+        function stopAutoplay(id) {
+            const carousel = carousels[id];
+            if (carousel && carousel.interval) {
+                clearInterval(carousel.interval);
+                carousel.interval = null;
+            }
+        }
+
+        function updateCarousel(id) {
+            const carousel = carousels[id];
+            if (!carousel || carousel.slides.length === 0) return;
+            const { track, dots, currentIndex } = carousel;
+            track.style.transform = `translateX(-${currentIndex * 100}%)`;
+            dots.forEach((dot, i) => {
+                dot.className = 'dot' + (i === currentIndex ? ' active' : '');
+            });
+        }
+
+        function moveCarousel(id, direction) {
+            const carousel = carousels[id];
+            if (!carousel || carousel.slides.length === 0) return;
+            let newIndex = carousel.currentIndex + direction;
+            if (newIndex < 0) newIndex = carousel.totalSlides - 1;
+            if (newIndex >= carousel.totalSlides) newIndex = 0;
+            carousel.currentIndex = newIndex;
+            updateCarousel(id);
+            resetAutoplay(id);
+        }
+
+        function resetAutoplay(id) { stopAutoplay(id); startAutoplay(id); }
+
+        function goToSlide(id, index) {
+            const carousel = carousels[id];
+            if (!carousel) return;
+            carousel.currentIndex = index;
+            updateCarousel(id);
+            resetAutoplay(id);
+        }
+
+        window.moveCarousel = moveCarousel;
+
+        function initHighlightsCarousel() {
+            const track = document.getElementById('highlightsTrack');
+            const dotsContainer = document.getElementById('highlightsDots');
+
+            const state = { currentIndex: 0, interval: null, highlights: [] };
+
+            function updateCarousel() {
+                const slides = track.querySelectorAll('.highlights-carousel-slide');
+                if (slides.length === 0) return;
+                track.style.transform = `translateX(-${state.currentIndex * 100}%)`;
+                const dots = dotsContainer.querySelectorAll('.dot');
+                dots.forEach((dot, i) => {
+                    dot.className = 'dot' + (i === state.currentIndex ? ' active' : '');
+                });
             }
 
-            document.getElementById('memberDetailName').textContent = name;
-            document.getElementById('memberDetailLocation').textContent = data.location || 'Not set';
-
-            const badgesEl = document.getElementById('memberDetailBadges');
-            let badgesHtml = '';
-            const statusInfo = getStatusLabel(data.status || 'offline');
-            badgesHtml += `<span class="status-badge ${statusInfo.cls}"><span class="status-dot ${data.status || 'offline'}" style="background:${
-                data.status === 'available' ? '#22c55e' :
-                data.status === 'busy' ? '#ef4444' :
-                data.status === 'away' ? '#f59e0b' :
-                data.status === 'dnd' ? '#8b5cf6' : '#9ca3af'
-            };"></span> ${statusInfo.label}</span>`;
-
-            const loveLifeInfo = getLoveLifeLabel(data.loveLife);
-            if (loveLifeInfo) {
-                badgesHtml += `<span class="lovelife-badge ${loveLifeInfo.cls}"><i class="fas ${loveLifeInfo.icon}"></i> ${loveLifeInfo.label}</span>`;
+            function startAutoplay() {
+                if (state.interval) clearInterval(state.interval);
+                const slides = track.querySelectorAll('.highlights-carousel-slide');
+                if (slides.length <= 1) return;
+                state.interval = setInterval(() => {
+                    const slidesCount = track.querySelectorAll('.highlights-carousel-slide').length;
+                    state.currentIndex = (state.currentIndex + 1) % slidesCount;
+                    updateCarousel();
+                }, CAROUSEL_AUTOPLAY_MS);
             }
-            badgesEl.innerHTML = badgesHtml;
 
-            const noteBlock = document.getElementById('memberDetailNoteBlock');
-            const note = notesCache[memberId];
-            if (note && note.text) {
-                noteBlock.style.display = 'block';
-                document.getElementById('memberDetailNoteText').textContent = note.text;
+            function stopAutoplay() {
+                if (state.interval) { clearInterval(state.interval); state.interval = null; }
+            }
 
-                const expireAt = note.expireAt
-                    ? (note.expireAt.seconds ? new Date(note.expireAt.seconds * 1000) : new Date(note.expireAt))
-                    : null;
-                const hoursLeft = expireAt ? Math.max(0, Math.ceil((expireAt - new Date()) / (1000 * 60 * 60))) : 0;
-                const expiryEl = document.getElementById('memberDetailNoteExpiry');
-                const expirySpan = expiryEl.querySelector('span');
-                if (expireAt) {
-                    if (hoursLeft <= 2) {
-                        expiryEl.classList.add('urgent');
-                        expirySpan.textContent = hoursLeft <= 1 ? 'Expiring very soon!' : `${hoursLeft} hours left`;
-                    } else {
-                        expiryEl.classList.remove('urgent');
-                        expirySpan.textContent = `${hoursLeft} hours left`;
-                    }
-                } else {
-                    expiryEl.classList.remove('urgent');
-                    expirySpan.textContent = '';
+            function createDots(count) {
+                dotsContainer.innerHTML = '';
+                for (let i = 0; i < count; i++) {
+                    const dot = document.createElement('button');
+                    dot.className = 'dot' + (i === 0 ? ' active' : '');
+                    dot.onclick = () => {
+                        state.currentIndex = i;
+                        updateCarousel();
+                        stopAutoplay();
+                        startAutoplay();
+                    };
+                    dotsContainer.appendChild(dot);
                 }
-            } else noteBlock.style.display = 'none';
-
-            const occupationSection = document.getElementById('memberDetailOccupationSection');
-            if (data.occupation) {
-                occupationSection.style.display = 'block';
-                document.getElementById('memberDetailOccupation').textContent = data.occupation;
-            } else occupationSection.style.display = 'none';
-
-            document.getElementById('memberDetailBio').textContent = data.bio || 'No bio provided.';
-
-            const interests = data.interests ? data.interests.split(',').map(t => t.trim()).filter(t => t) : [];
-            const interestsSection = document.getElementById('memberDetailInterestsSection');
-            if (interests.length) {
-                interestsSection.style.display = 'block';
-                document.getElementById('memberDetailInterests').innerHTML = interests.map(t => `<span class="interest-tag">#${escapeHtml(t)}</span>`).join('');
-            } else interestsSection.style.display = 'none';
-
-            const socialsEl = document.getElementById('memberDetailSocials');
-            const socialsSection = document.getElementById('memberDetailSocialsSection');
-            let socialsHtml = '';
-            if (data.instagram) socialsHtml += `<a href="https://instagram.com/${encodeURIComponent(data.instagram.replace('@',''))}" target="_blank" rel="noopener"><i class="fab fa-instagram"></i></a>`;
-            if (data.twitter) socialsHtml += `<a href="https://twitter.com/${encodeURIComponent(data.twitter.replace('@',''))}" target="_blank" rel="noopener"><i class="fab fa-twitter"></i></a>`;
-            if (data.tiktok) socialsHtml += `<a href="https://tiktok.com/@${encodeURIComponent(data.tiktok.replace('@',''))}" target="_blank" rel="noopener"><i class="fab fa-tiktok"></i></a>`;
-            if (data.facebook) socialsHtml += `<a href="${escapeAttr(data.facebook)}" target="_blank" rel="noopener"><i class="fab fa-facebook"></i></a>`;
-            if (socialsHtml) {
-                socialsSection.style.display = 'block';
-                socialsEl.innerHTML = socialsHtml;
-            } else socialsSection.style.display = 'none';
-
-            const dlBtn = document.getElementById('memberDetailDownloadBtn');
-            if (photoUrl) {
-                dlBtn.disabled = false;
-                dlBtn.innerHTML = '<i class="fas fa-download"></i> Download Avatar';
-            } else {
-                dlBtn.disabled = true;
-                dlBtn.innerHTML = '<i class="fas fa-ban"></i> No avatar';
             }
 
-            const msgBtn = document.getElementById('memberDetailChatBtn');
-            msgBtn.style.display = chatFeatureEnabled ? 'inline-flex' : 'none';
+            function loadHighlights() {
+                if (unsubscribeHighlights) unsubscribeHighlights();
 
-            document.getElementById('memberDetailModal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-            syncModalOpenState();
-        }
+                unsubscribeHighlights = db.collection('highlights')
+                    .orderBy('createdAt', 'desc')
+                    .limit(HIGHLIGHTS_LIMIT)
+                    .onSnapshot(async (snapshot) => {
+                        const now = new Date();
+                        const validHighlights = [];
+                        const expiredIds = [];
 
-        function closeMemberDetail() {
-            document.getElementById('memberDetailModal').classList.remove('active');
-            if (!anyModalOpen()) document.body.style.overflow = 'auto';
-            document.getElementById('memberDetailAvatar').innerHTML = '';
-            currentMemberDetail = null;
-            syncModalOpenState();
-        }
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            const expiresAt = data.expiresAt ? new Date(data.expiresAt.toDate()) : new Date();
+                            const timeLeft = expiresAt - now;
+                            if (timeLeft > 0) {
+                                validHighlights.push({ id: doc.id, ...data });
+                            } else {
+                                expiredIds.push({ id: doc.id, imageURLs: data.imageURLs || [] });
+                            }
+                        });
 
-        async function downloadCurrentMemberDetail() {
-            if (!currentMemberDetail || !currentMemberDetail.photoURL) {
-                showToast('No profile picture available.', 'warn');
-                return;
+                        const authorUids = new Set();
+                        validHighlights.forEach(h => { if (h.authorUid) authorUids.add(h.authorUid); });
+                        const missingUids = [...authorUids].filter(uid => !userProfileCache[uid]);
+                        await Promise.all(missingUids.map(async uid => {
+                            try {
+                                const uDoc = await db.collection('users').doc(uid).get();
+                                if (uDoc.exists) userProfileCache[uid] = uDoc.data();
+                            } catch (e) {
+                                console.warn('Could not fetch user:', uid, e);
+                            }
+                        }));
+
+                        highlightsData = validHighlights;
+                        state.highlights = validHighlights;
+                        renderHighlights();
+
+                        attachHighlightCommentCountListeners(validHighlights.map(h => h.id));
+
+                        // ★ Attach reaction listeners for each visible highlight
+                        detachAllHighlightReactionsListeners();
+                        validHighlights.forEach(hl => attachHighlightReactionsListener(hl.id));
+
+                        if (expiredIds.length) {
+                            setTimeout(() => {
+                                expiredIds.forEach(({ id, imageURLs }) => {
+                                    deleteHighlight(id, imageURLs);
+                                });
+                            }, 0);
+                        }
+                    }, (error) => {
+                        console.error('Error loading highlights:', error);
+                    });
             }
-            const safeName = sanitizeFilename(currentMemberDetail.displayName || 'member');
-            const ext = extFromUrl(currentMemberDetail.photoURL);
+
+            async function deleteHighlight(id, imageUrls) {
+                try {
+                    // Delete reactions subcollection
+                    try {
+                        const reactionsSnap = await db.collection('highlights').doc(id)
+                            .collection('reactions').get();
+                        if (!reactionsSnap.empty) {
+                            const batch = db.batch();
+                            reactionsSnap.forEach(doc => batch.delete(doc.ref));
+                            await batch.commit();
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    await db.collection('highlights').doc(id).delete();
+                    detachHighlightReactionsListener(id);
+                    delete highlightReactionsCache[id];
+                } catch (error) {
+                    console.error('Error deleting highlight doc:', error);
+                }
+            }
+
+            function renderHighlights() {
+                const wasRunning = state.interval !== null;
+                stopAutoplay();
+
+                if (state.highlights.length === 0) {
+                    track.innerHTML = `
+                        <div class="highlights-carousel-slide single-item" style="display:flex;align-items:center;justify-content:center;padding:40px;min-height:300px;">
+                            <div style="text-align:center;color:var(--theme-text-dim);">
+                                <i class="fas fa-images" style="font-size:48px;color:var(--theme-primary-soft);display:block;margin-bottom:15px;"></i>
+                                <h3 style="color:var(--theme-text);font-size:20px;">No highlights yet</h3>
+                                <p>Be the first to share a moment with the squad!</p>
+                            </div>
+                        </div>
+                    `;
+                    createDots(1);
+                    return;
+                }
+
+                const perSlide = getItemsPerSlide();
+                const slides = [];
+                for (let i = 0; i < state.highlights.length; i += perSlide) {
+                    slides.push(state.highlights.slice(i, i + perSlide));
+                }
+
+                let html = '';
+                slides.forEach(slide => {
+                    const slideClass = perSlide === 1 ? 'highlights-carousel-slide single-item' : 'highlights-carousel-slide';
+                    html += `<div class="${slideClass}">`;
+                    slide.forEach(item => {
+                        const imageUrls = item.imageURLs || [];
+                        const mainImage = imageUrls.length > 0 ? imageUrls[0] : '';
+                        const thumbImage = mainImage ? cloudinaryThumb(mainImage, 500) : '';
+                        const authorName = item.authorName || 'Someone';
+                        const authorUid = item.authorUid || '';
+                        const authorProfile = userProfileCache[authorUid] || {};
+                        const authorPhoto = authorProfile.photoURL || '';
+                        const initials = authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                        const caption = item.caption || '';
+                        const expiresAt = item.expiresAt ? new Date(item.expiresAt.toDate()) : new Date();
+                        const now = new Date();
+                        const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+                        const isUrgent = daysLeft <= 1;
+                        const hasMulti = imageUrls.length > 1;
+                        const hasImages = imageUrls.length > 0;
+
+                        const commentCount = highlightCommentCounts[item.id] || 0;
+
+                        const avatarContent = authorPhoto
+                            ? `<img src="${cloudinaryAvatar(authorPhoto, 80)}" alt="${escapeAttr(authorName)}" loading="lazy" decoding="async" />`
+                            : initials;
+
+                        const safeId = escapeAttr(item.id);
+
+                        let actionButtons = '';
+                        if (hasImages) {
+                            if (hasMulti) {
+                                actionButtons = `
+                                    <button class="hl-view" onclick="event.stopPropagation(); openGallery('${safeId}')">
+                                        <i class="fas fa-expand"></i> View All
+                                    </button>
+                                    <button class="hl-fullview" onclick="event.stopPropagation(); fullViewHighlight('${safeId}')">
+                                        <i class="fas fa-search-plus"></i> Full
+                                    </button>
+                                    <button class="hl-download" onclick="event.stopPropagation(); downloadAllHighlightImages('${safeId}')">
+                                        <i class="fas fa-file-zipper"></i> Zip
+                                    </button>
+                                `;
+                            } else {
+                                actionButtons = `
+                                    <button class="hl-fullview" onclick="event.stopPropagation(); fullViewHighlight('${safeId}')">
+                                        <i class="fas fa-search-plus"></i> Full
+                                    </button>
+                                    <button class="hl-download" onclick="event.stopPropagation(); downloadSingleHighlightImage('${safeId}')">
+                                        <i class="fas fa-download"></i> Download
+                                    </button>
+                                `;
+                            }
+                        }
+
+                        html += `
+                            <div class="highlights-carousel-item" data-highlight-id="${safeId}">
+                                <div class="image-container">
+                                    ${thumbImage
+                                        ? `<img src="${thumbImage}" alt="Highlight" loading="lazy" decoding="async" />`
+                                        : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:40px;color:var(--theme-primary);"><i class="fas fa-image"></i></div>`}
+                                    ${hasMulti ? `<span class="image-count"><i class="fas fa-images"></i> ${imageUrls.length}</span>` : ''}
+                                    <span class="expiry-badge"><i class="fas fa-clock"></i> ${daysLeft}d left</span>
+                                    ${hasImages ? `
+                                        <div class="hl-actions">
+                                            ${actionButtons}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div class="item-body">
+                                    ${caption ? `<div class="caption">${escapeHtml(caption)}</div>` : ''}
+                                    <div class="meta">
+                                        <span class="author"><span class="avatar-small">${avatarContent}</span> ${escapeHtml(authorName)}</span>
+                                        <span class="expiry-time ${isUrgent ? 'urgent' : ''}"><i class="fas fa-clock"></i> ${daysLeft}d left</span>
+                                    </div>
+                                    <div class="meta" style="margin-top:6px; padding-top:6px; border-top:1px solid var(--theme-border-soft);">
+                                        <span style="font-size:11px; color:var(--theme-text-dim); display:flex; align-items:center; gap:4px;">
+                                            <i class="fas fa-comment"></i>
+                                            <span data-hl-comment-count="${safeId}" style="display:${commentCount > 0 ? 'inline-flex' : 'none'}; font-weight:700; color:var(--theme-primary);">${commentCount}</span>
+                                        </span>
+                                    </div>
+                                    ${renderHighlightReactionBar(item.id)}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                });
+
+                track.innerHTML = html;
+
+                track.querySelectorAll('.highlights-carousel-item').forEach(card => {
+                    card.addEventListener('click', function(e) {
+                        if (e.target.closest('.hl-actions')) return;
+                        if (e.target.closest('.hl-reaction-bar')) return;
+                        if (e.target.closest('.hl-reaction-btn')) return;
+                        if (e.target.closest('.hl-reaction-picker')) return;
+                        const id = this.dataset.highlightId;
+                        openHighlightDetail(id);
+                    });
+                });
+
+                createDots(slides.length);
+                state.currentIndex = 0;
+                updateCarousel();
+                if (wasRunning || state.highlights.length > 0) startAutoplay();
+            }
+
+            window.moveHighlightsCarousel = function(direction) {
+                const slides = track.querySelectorAll('.highlights-carousel-slide');
+                if (slides.length === 0) return;
+                stopAutoplay();
+                state.currentIndex = (state.currentIndex + direction + slides.length) % slides.length;
+                updateCarousel();
+                startAutoplay();
+            };
+
+            window.__rerenderHighlights = function() { renderHighlights(); };
+
+            const wrapper = document.getElementById('highlightsCarousel');
+            wrapper.addEventListener('mouseenter', stopAutoplay);
+            wrapper.addEventListener('mouseleave', startAutoplay);
+
+            loadHighlights();
+        }
+
+        async function downloadSingleHighlightImage(id) {
+            const item = highlightsData.find(h => h.id === id);
+            if (!item || !item.imageURLs || !item.imageURLs.length) return;
+            const url = item.imageURLs[0];
+            const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
+            const ext = extFromUrl(url);
+            const filename = `TAMAWO_${safeAuthor}_photo_1.${ext}`;
             try {
-                await downloadImage(currentMemberDetail.photoURL, `TAMAWO_${safeName}_avatar.${ext}`);
-            } catch (err) { showToast('Failed to download: ' + err.message, 'error'); }
+                await downloadImage(url, filename);
+            } catch (err) {
+                window.open(url, '_blank', 'noopener');
+            }
+        }
+
+        function fullViewHighlight(id) {
+            const item = highlightsData.find(h => h.id === id);
+            if (!item || !item.imageURLs || !item.imageURLs.length) return;
+            const images = item.imageURLs;
+            const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
+            const ext = extFromUrl(images[0]);
+            // ★ Pass the full array + starting index 0 + 'highlight' context
+            openFullView(images[0], `TAMAWO_${safeAuthor}_photo_1.${ext}`,
+                images, 0, 'highlight');
+        }
+
+        async function downloadAllHighlightImages(id) {
+            const item = highlightsData.find(h => h.id === id);
+            if (!item || !item.imageURLs || !item.imageURLs.length) return;
+
+            const zip = new JSZip();
+            const safeAuthor = sanitizeFilename(item.authorName || 'highlight');
+            const folder = zip.folder(`TAMAWO_${safeAuthor}`);
+            const urls = item.imageURLs;
+
+            try {
+                for (let i = 0; i < urls.length; i++) {
+                    try {
+                        const response = await fetch(urls[i]);
+                        const blob = await response.blob();
+                        const ext = (blob.type.split('/')[1] || extFromUrl(urls[i])).split('+')[0];
+                        folder.file(`photo_${i + 1}.${ext}`, blob);
+                    } catch (e) {
+                        console.warn('Failed to fetch image for zip:', e);
+                    }
+                }
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const date = new Date().toISOString().slice(0, 10);
+                saveAs(zipBlob, `TAMAWO_${safeAuthor}_${date}.zip`);
+            } catch (err) {
+                console.error('ZIP error:', err);
+                showToast('Error creating ZIP: ' + err.message, 'error');
+            }
         }
 
         function anyModalOpen() {
             if (document.getElementById('hlReactionSheet')) return true;
 
-            return ['uploadModal', 'galleryModal', 'lightboxModal', 'fullViewModal', 'highlightDetailModal', 'memberDetailModal', 'noteModal', 'announcementViewModal', 'newMessageModal', 'reactionCustomizeModal', 'titaSaveConfirmModal']
-                .some(id => {
-                    const el = document.getElementById(id);
-                    return el && el.classList.contains('active');
-                })
-                || (document.getElementById('titaPanel') && document.getElementById('titaPanel').classList.contains('open'))
-                || (document.getElementById('confirmDialog') && document.getElementById('confirmDialog').classList.contains('active'));
-        }
-
-        // ================================================================
-        // ===== UI HELPERS =====
-        // ================================================================
-        function toggleMobileMenu() {
-            document.getElementById('navLinks').classList.toggle('active');
-        }
-
-        document.querySelectorAll('.nav-links a, .nav-links button').forEach(link => {
-            link.addEventListener('click', () => {
-                document.getElementById('navLinks').classList.remove('active');
-            });
-        });
-
-        // ================================================================
-        // ===== LOGOUT =====
-        // ================================================================
-        function logout() {
-            showConfirm({
-                title: 'Sign out?',
-                message: 'You\'ll be signed out of TAMAWO and returned to the home page. Any unsaved changes will be lost.',
-                confirmLabel: 'Sign out',
-                type: 'danger',
-                onConfirm: async () => {
-                    try {
-                        stopAutoCleanup();
-                        stopCommentAutoCleanup();
-                        detachAllNoteCountListeners();
-                        detachChatListeners();
-                        detachHighlightCommentsListener();
-                        detachHighlightCommentCountListeners();
-                        detachAllHighlightReactionsListeners();
-                        closeHighlightReactionSheet();
-                        if (activeCommentsUnsubscribe) { activeCommentsUnsubscribe(); activeCommentsUnsubscribe = null; }
-                        if (chatFeatureUnsubscribe) { chatFeatureUnsubscribe(); chatFeatureUnsubscribe = null; }
-                        if (activityUnsubscribe) { try { activityUnsubscribe(); } catch (e) {} activityUnsubscribe = null; }
-
-                        if (auth.currentUser) {
-                            try { sessionStorage.removeItem('tamawo_me_' + auth.currentUser.uid); } catch (e) {}
-                            try { sessionStorage.removeItem('tamawo_last_visit_' + auth.currentUser.uid); } catch (e) {}
-                        }
-                        await auth.signOut();
-                        window.location.href = 'index.html';
-                    } catch (error) {
-                        showToast('Error signing out: ' + error.message, 'error');
-                    }
-                }
+            return [
+                'itemModal',
+                'memberModal',
+                'galleryModal',
+                'highlightDetailModal',
+                'noteModal',
+                'announcementViewModal',
+                'fullViewModal',
+                'titaSaveConfirmModal',
+                'confirmDialog'
+            ].some(id => {
+                const el = document.getElementById(id);
+                return el && el.classList.contains('active');
             });
         }
 
-        window.onclick = function(event) {
-            const uploadModal = document.getElementById('uploadModal');
-            const galleryModal = document.getElementById('galleryModal');
-            const lightboxModal = document.getElementById('lightboxModal');
-            const fullViewModal = document.getElementById('fullViewModal');
-            const highlightDetailModal = document.getElementById('highlightDetailModal');
-            const memberDetailModal = document.getElementById('memberDetailModal');
-            const noteModal = document.getElementById('noteModal');
-            const titaPanel = document.getElementById('titaPanel');
-            const announcementPopup = document.getElementById('announcementPopup');
-            const announcementViewModal = document.getElementById('announcementViewModal');
-            const newMessageModal = document.getElementById('newMessageModal');
-            const confirmDialog = document.getElementById('confirmDialog');
-
-            if (event.target === document.getElementById('titaSaveConfirmModal')) closeTitaSaveConfirmModal();
-            if (event.target === uploadModal) closeUploadModal();
-            if (event.target === galleryModal) closeGallery();
-            if (event.target === lightboxModal) closeLightbox();
-            if (event.target === fullViewModal) closeFullView();
-            if (event.target === highlightDetailModal) closeHighlightDetail();
-            if (event.target === memberDetailModal) closeMemberDetail();
-            if (event.target === noteModal) closeNoteModal();
-            if (event.target === announcementViewModal) closeAnnouncementView();
-            if (event.target === newMessageModal) closeNewMessageModal();
-            if (event.target === confirmDialog) closeConfirmDialog();
-            if (event.target === document.getElementById('reactionCustomizeModal')) closeReactionCustomizeModal();
-
-            if (titaPanel && titaPanel.classList.contains('open') &&
-                !titaPanel.contains(event.target) &&
-                !event.target.closest('#titaLauncher')) {
-                closeTitaPanel();
-            }
-
-            if (announcementPopup && announcementPopup.classList.contains('open')) {
-                if (!announcementPopup.contains(event.target) &&
-                    !event.target.closest('#announcementBell') &&
-                    !event.target.closest('#announcementBellMobile') &&
-                    !event.target.closest('.announcement-wrapper') &&
-                    !event.target.closest('.navbar-mobile-bell')) {
-                    closeAnnouncementPopup();
-                }
-            }
-
-            // ❌ REMOVED: `activeReactionPickerMsgId` block — dashboard-only, not defined here.
-        };
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                if (document.getElementById('hlReactionSheet')) closeHighlightReactionSheet();
-                else if (document.getElementById('reactionCustomizeModal').classList.contains('active')) closeReactionCustomizeModal();
-                else if (document.getElementById('confirmDialog').classList.contains('active')) closeConfirmDialog();
-                else if (document.getElementById('fullViewModal').classList.contains('active')) closeFullView();
-                else if (document.getElementById('newMessageModal').classList.contains('active')) closeNewMessageModal();
-                else if (document.getElementById('lightboxModal').classList.contains('active')) closeLightbox();
-                else if (document.getElementById('galleryModal').classList.contains('active')) closeGallery();
-                else if (document.getElementById('uploadModal').classList.contains('active')) closeUploadModal();
-                else if (document.getElementById('highlightDetailModal').classList.contains('active')) closeHighlightDetail();
-                else if (document.getElementById('memberDetailModal').classList.contains('active')) closeMemberDetail();
-                else if (document.getElementById('noteModal').classList.contains('active')) closeNoteModal();
-                else if (document.getElementById('announcementViewModal').classList.contains('active')) closeAnnouncementView();
-                else if (document.getElementById('titaPanel').classList.contains('open')) closeTitaPanel();
-                else if (document.getElementById('announcementPopup').classList.contains('open')) closeAnnouncementPopup();
-                else if (document.getElementById('titaSaveConfirmModal').classList.contains('active')) closeTitaSaveConfirmModal();
-                // ❌ REMOVED: `_actionSheetMsgId`, `chat-fullscreen-active`, `activeReactionPickerMsgId` — dashboard-only.
-            }
-        });
-
-        window.addEventListener('scroll', function() {
-            const navbar = document.getElementById('navbar');
-            navbar.style.boxShadow = window.scrollY > 20
-                ? '0 2px 30px rgba(0,0,0,0.08)'
-                : '0 2px 20px rgba(0,0,0,0.04)';
-        });
-
-        // ================================================================
-        // ===== TITA TIMA =====
-        // ================================================================
         function toggleTitaPanel() {
             const panel = document.getElementById('titaPanel');
-            if (panel.classList.contains('open')) closeTitaPanel();
-            else openTitaPanel();
+            if (panel.classList.contains('open')) {
+                closeTitaPanel();
+            } else {
+                openTitaPanel();
+            }
         }
 
         function openTitaPanel() {
@@ -8081,6 +7821,7 @@
             if (note && note.text) {
                 noteInput.value = note.text;
                 noteCount.textContent = note.text.length;
+
                 const expireAt = note.expireAt
                     ? (note.expireAt.seconds ? new Date(note.expireAt.seconds * 1000) : new Date(note.expireAt))
                     : null;
@@ -8210,6 +7951,7 @@
 
                 titaUserData = { ...titaUserData, ...updateData };
                 userProfileCache[titaCurrentUser.uid] = { id: titaCurrentUser.uid, ...titaUserData };
+                carouselItemCache[`users:${titaCurrentUser.uid}`] = { id: titaCurrentUser.uid, ...titaUserData };
 
                 try {
                     sessionStorage.setItem('tamawo_me_' + titaCurrentUser.uid, JSON.stringify({
@@ -8227,7 +7969,7 @@
                     }
                 }
 
-                renderMembersGridFromCache();
+                renderMembersSection();
 
                 showTitaSaveConfirmModal({
                     title: 'Saved!',
@@ -8248,47 +7990,6 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const wrapper = document.getElementById('highlightsCarousel');
-            if (wrapper) {
-                wrapper.addEventListener('mouseenter', stopHighlightsAutoplay);
-                wrapper.addEventListener('mouseleave', startHighlightsAutoplay);
-            }
-
-            const chatInput = document.getElementById('chatInput');
-            if (chatInput) {
-                chatInput.addEventListener('input', handleChatInput);
-                chatInput.addEventListener('keydown', handleChatKeydown);
-                chatInput.addEventListener('blur', () => {
-                    setTimeout(closeChatMentionDropdown, 180);
-                });
-
-                chatInput.addEventListener('focus', () => {
-                    ensureChatInputVisible();
-                    setTimeout(ensureChatInputVisible, 250);
-                    setTimeout(ensureChatInputVisible, 500);
-                });
-            }
-
-            if (window.visualViewport) {
-                let _vvTimer = null;
-                window.visualViewport.addEventListener('resize', () => {
-                    const active = document.activeElement;
-                    if (!active || active.id !== 'chatInput') return;
-                    if (_vvTimer) clearTimeout(_vvTimer);
-                    _vvTimer = setTimeout(() => {
-                        ensureChatInputVisible();
-                        _vvTimer = null;
-                    }, 80);
-                });
-                window.visualViewport.addEventListener('scroll', () => {
-                    const active = document.activeElement;
-                    if (!active || active.id !== 'chatInput') return;
-                    ensureChatInputVisible();
-                });
-            }
-        });
-
         let lastIsMobile = isMobile();
         let resizeDebounceTimer = null;
 
@@ -8298,36 +7999,292 @@
                 const nowMobile = isMobile();
                 if (nowMobile !== lastIsMobile) {
                     lastIsMobile = nowMobile;
-                    loadHighlights();
+                    Object.keys(carouselDataStore).forEach(id => renderCarousel(id, true));
+                    if (typeof window.__rerenderHighlights === 'function') {
+                        window.__rerenderHighlights();
+                    }
+                }
+                const popup = document.getElementById('announcementPopup');
+                if (popup && popup.classList.contains('open')) {
+                    const isMobileNow = window.innerWidth <= 768;
+                    const anchor = isMobileNow
+                        ? document.getElementById('announcementBellMobile')
+                        : document.getElementById('announcementBell');
+                    positionAnnouncementPopup(anchor);
                 }
             }, 150);
         });
 
-        window.addEventListener('resize', function() {
-            const popup = document.getElementById('announcementPopup');
-            if (popup && popup.classList.contains('open')) {
-                const isMobileNow = window.innerWidth <= 768;
-                const anchor = isMobileNow
-                    ? document.getElementById('announcementBellMobile')
-                    : document.getElementById('announcementBell');
-                positionAnnouncementPopup(anchor);
+        // ★ Reposition modal reaction picker on scroll/resize
+        (function attachModalPickerReposition() {
+            let rafToken = 0;
+            function repositionOpenModalPicker() {
+                const picker = document.querySelector('.highlight-detail-modal .hl-reaction-picker.show, .hl-reaction-picker--modal.show');
+                if (!picker) return;
+                positionModalReactionPicker(picker, null);
+            }
+            function scheduleReposition() {
+                if (rafToken) return;
+                rafToken = requestAnimationFrame(() => {
+                    rafToken = 0;
+                    repositionOpenModalPicker();
+                });
+            }
+            document.addEventListener('scroll', function(e) {
+                const target = e.target;
+                if (target && target.classList && (
+                    target.classList.contains('modal-body') ||
+                    target.classList.contains('modal-content') ||
+                    target.classList.contains('highlight-detail-modal')
+                )) {
+                    scheduleReposition();
+                }
+            }, true);
+            window.addEventListener('resize', scheduleReposition);
+            window.addEventListener('orientationchange', scheduleReposition);
+        })();
+
+        document.addEventListener('DOMContentLoaded', function() {
+            showLoadingOverlay('Loading TAMAWO…');
+
+            loadCarouselData('coffeeShops', 'coffeeTrack', 'coffeeDots', 'coffee');
+            loadCarouselData('favoritePlaces', 'placesTrack', 'placesDots', 'places');
+            loadCarouselData('thingsToDo', 'activitiesTrack', 'activitiesDots', 'activities');
+            loadMembersFromFirestore();
+            loadNotes();
+
+            startCommentAutoCleanup();
+
+            setTimeout(() => { initHighlightsCarousel(); }, 500);
+
+            document.querySelectorAll('.carousel-wrapper').forEach(wrapper => {
+                wrapper.addEventListener('mouseenter', function() {
+                    const id = this.id.replace('Carousel', '').toLowerCase();
+                    stopAutoplay(id);
+                });
+                wrapper.addEventListener('mouseleave', function() {
+                    const id = this.id.replace('Carousel', '').toLowerCase();
+                    startAutoplay(id);
+                });
+            });
+
+            hideLoadingOverlayWhenReady();
+        });
+
+        window.addEventListener('beforeunload', function() {
+            stopCommentAutoCleanup();
+            detachAllNoteCountListeners();
+            detachHighlightCommentsListener();
+            detachAllHighlightReactionsListeners();
+            closeHighlightReactionSheet();
+            if (activeCommentsUnsubscribe) { activeCommentsUnsubscribe(); activeCommentsUnsubscribe = null; }
+        });
+
+        function toggleMobileMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.nav-links a, .nav-links button').forEach(link => {
+            link.addEventListener('click', () => {
+                document.getElementById('navLinks').classList.remove('active');
+            });
+        });
+
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        window.addEventListener('scroll', function() {
+            const navbar = document.getElementById('navbar');
+            navbar.style.boxShadow = window.scrollY > 20
+                ? '0 2px 30px rgba(0,0,0,0.08)'
+                : '0 2px 20px rgba(0,0,0,0.04)';
+        });
+
+        window.addEventListener('click', function(event) {
+            const itemModal = document.getElementById('itemModal');
+            const memberModal = document.getElementById('memberModal');
+            const galleryModal = document.getElementById('galleryModal');
+            const highlightDetailModal = document.getElementById('highlightDetailModal');
+            const titaPanel = document.getElementById('titaPanel');
+            const announcementPopup = document.getElementById('announcementPopup');
+            const noteModal = document.getElementById('noteModal');
+            const announcementViewModal = document.getElementById('announcementViewModal');
+            const fullViewModal = document.getElementById('fullViewModal');
+            const confirmDialog = document.getElementById('confirmDialog');
+
+            if (event.target === document.getElementById('titaSaveConfirmModal')) closeTitaSaveConfirmModal();
+            if (event.target === itemModal) closeItemModal();
+            if (event.target === memberModal) closeMemberModal();
+            if (event.target === galleryModal) closeGallery();
+            if (event.target === highlightDetailModal) closeHighlightDetail();
+            if (event.target === noteModal) closeNoteModal();
+            if (event.target === announcementViewModal) closeAnnouncementView();
+            if (event.target === fullViewModal) closeFullView();
+            if (event.target === confirmDialog) closeConfirmDialog();
+
+            if (titaPanel && titaPanel.classList.contains('open') &&
+                !titaPanel.contains(event.target) &&
+                !event.target.closest('#titaLauncher')) {
+                closeTitaPanel();
+            }
+
+            if (announcementPopup && announcementPopup.classList.contains('open')) {
+                if (!announcementPopup.contains(event.target) &&
+                    !event.target.closest('#announcementBell') &&
+                    !event.target.closest('#announcementBellMobile') &&
+                    !event.target.closest('.announcement-wrapper') &&
+                    !event.target.closest('.navbar-mobile-bell')) {
+                    closeAnnouncementPopup();
+                }
             }
         });
 
-        // ================================================================
-        // ===== SELECTION MODE: Click handler for highlight cards =====
-        // ================================================================
-        document.addEventListener('click', function(e) {
-            const highlightCard = e.target.closest('.highlights-carousel-item');
-            if (!highlightCard) return;
-            if (!selectionMode) return;
-            if (e.target.closest('.hl-actions')) return;
-            if (e.target.closest('.hl-reaction-bar')) return;
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            if (document.getElementById('hlReactionSheet')) closeHighlightReactionSheet();
+            else if (document.getElementById('confirmDialog').classList.contains('active')) closeConfirmDialog();
+            else if (document.getElementById('announcementViewModal').classList.contains('active')) closeAnnouncementView();
+            else if (document.getElementById('fullViewModal').classList.contains('active')) closeFullView();
+            else if (document.getElementById('galleryModal').classList.contains('active')) closeGallery();
+            else if (document.getElementById('highlightDetailModal').classList.contains('active')) closeHighlightDetail();
+            else if (document.getElementById('memberModal').classList.contains('active')) closeMemberModal();
+            else if (document.getElementById('itemModal').classList.contains('active')) closeItemModal();
+            else if (document.getElementById('noteModal').classList.contains('active')) closeNoteModal();
+            else if (document.getElementById('titaPanel').classList.contains('open')) closeTitaPanel();
+            else if (document.getElementById('announcementPopup').classList.contains('open')) closeAnnouncementPopup();
+            else if (document.getElementById('titaSaveConfirmModal')?.classList.contains('active')) closeTitaSaveConfirmModal();
+        });
 
-            e.stopPropagation();
-            const id = highlightCard.dataset.highlightId;
-            if (id) toggleHighlightSelection(id);
-        }, true);
+        // ================================================================
+        // ===== HELPERS =====
+        // ================================================================
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return String(text)
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function escapeRegex(str) {
+            return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function sanitizeFilename(name) {
+            return String(name || 'item')
+                .replace(/[^a-z0-9_\-\s]+/gi, '').trim()
+                .replace(/\s+/g, '_').slice(0, 40) || 'item';
+        }
+
+        function extFromUrl(url) {
+            if (!url) return 'jpg';
+            const match = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
+            return match ? match[1].toLowerCase() : 'jpg';
+        }
+
+        function formatRelativeTime(date) {
+            if (!date) return 'Just now';
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMin = Math.floor(diffMs / 60000);
+            if (diffMin < 1) return 'Just now';
+            if (diffMin < 60) return `${diffMin}m ago`;
+            const diffHr = Math.floor(diffMin / 60);
+            if (diffHr < 24) return `${diffHr}h ago`;
+            const diffDay = Math.floor(diffHr / 24);
+            if (diffDay < 7) return `${diffDay}d ago`;
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function formatFullDate(date) {
+            if (!date) return '';
+            return date.toLocaleDateString('en-US', {
+                weekday: 'long', year: 'numeric', month: 'long',
+                day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function getLoveLifeLabel(value) {
+            switch (value) {
+                case 'Single': return { label: 'Single', icon: 'fa-heart-broken', cls: 'single' };
+                case 'MU': return { label: 'MU', icon: 'fa-heart', cls: 'mu' };
+                case 'Married': return { label: 'Married', icon: 'fa-ring', cls: 'married' };
+                default: return null;
+            }
+        }
+
+        function getStatusLabel(status) {
+            const map = {
+                'available': { label: 'Available', cls: 'available' },
+                'busy': { label: 'Busy', cls: 'busy' },
+                'away': { label: 'Away', cls: 'away' },
+                'dnd': { label: 'Do Not Disturb', cls: 'dnd' },
+                'offline': { label: 'Offline', cls: 'offline' }
+            };
+            return map[status] || map['offline'];
+        }
+
+        function formatBirthday(birthday) {
+            if (!birthday || typeof birthday !== 'string') return '';
+            const parts = birthday.split('-');
+            if (parts.length !== 3) return birthday;
+            const month = parseInt(parts[1], 10);
+            const day = parseInt(parts[2], 10);
+            if (isNaN(month) || isNaN(day)) return birthday;
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+            return `${monthNames[month - 1]} ${day}`;
+        }
+
+        function cloudinaryThumb(url, width = 500) {
+            if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) return url;
+            const afterUpload = url.split('/upload/')[1];
+            if (/^[a-z]_/.test(afterUpload) || /^[a-z]+,[a-z]/.test(afterUpload)) return url;
+            return url.replace('/upload/', `/upload/w_${width},q_auto:good,f_auto/`);
+        }
+
+        function cloudinaryAvatar(url, size = 400) {
+            if (!url || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) return url;
+            const afterUpload = url.split('/upload/')[1];
+            if (/^[a-z]_/.test(afterUpload) || /^[a-z]+,[a-z]/.test(afterUpload)) return url;
+            return url.replace('/upload/', `/upload/w_${size},h_${size},c_fill,g_face,q_auto:good,f_auto/`);
+        }
+
+        async function getCurrentUserProfileCached(user) {
+            const CACHE_KEY = 'tamawo_me_' + user.uid;
+            try {
+                const raw = sessionStorage.getItem(CACHE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.uid === user.uid && (Date.now() - parsed.t) < USER_PROFILE_CACHE_TTL) {
+                        return parsed.data;
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            try {
+                const doc = await db.collection('users').doc(user.uid).get();
+                const data = doc.data() || {};
+                try {
+                    sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+                        uid: user.uid, t: Date.now(), data
+                    }));
+                } catch (e) { /* ignore */ }
+                return data;
+            } catch (e) {
+                console.warn('getCurrentUserProfileCached failed:', e);
+                return {};
+            }
+        }
     </script>
 
 <script>
