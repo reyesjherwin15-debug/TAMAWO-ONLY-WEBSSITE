@@ -7611,7 +7611,8 @@
                     .get();
 
                 const count = snapshot.size;
-                document.getElementById('memberCountLabel').textContent = `(${count})`;
+                const countEl = document.getElementById('memberCountDisplay');
+                if (countEl) countEl.textContent = `${sorted.length} member${sorted.length === 1 ? '' : 's'}`;
 
                 if (snapshot.empty) {
                     grid.innerHTML = `
@@ -7642,6 +7643,8 @@
             if (!grid) return;
 
             const memberIds = Object.keys(userProfileCache);
+            const countEl = document.getElementById('memberCountDisplay');
+
             if (memberIds.length === 0) {
                 grid.innerHTML = `
                     <div class="empty-state">
@@ -7650,6 +7653,7 @@
                         <p>Be the first to join!</p>
                     </div>
                 `;
+                if (countEl) countEl.textContent = '0 members';
                 return;
             }
 
@@ -7661,7 +7665,7 @@
                     return an.localeCompare(bn);
                 });
 
-            document.getElementById('memberCountLabel').textContent = `(${sorted.length})`;
+            if (countEl) countEl.textContent = `${sorted.length} member${sorted.length === 1 ? '' : 's'}`;
 
             let html = '';
             sorted.forEach(data => {
