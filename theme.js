@@ -3,6 +3,8 @@
    TIMAWA — Shared theme system
    Loaded SYNCHRONOUSLY in <head> after theme.css, before page render.
 
+   ★ v8 ★  Desktop lag fix: cursor is now a native OS cursor (zero JS per move, never lags while dragging);
+           performance tiers + frame-time governor (see perfHooks). Palettes and scenes unchanged.
    ★ v7 ★ Cozy "places" for forest / sunshine / starry / sakura / nebula / ember / autumn / tropic / moonlit / aurora (mobile-tuned),
    NEW themes: spring, summer, rainy, winter (Seasons) + xmas, halloween, easter, newyear (Holidays),
    THEME_GROUPS for the picker, and a rewritten smooth cursor engine (see cursorKit). Existing palettes unchanged.
@@ -1023,119 +1025,55 @@
     });
 
 
-    // ── themed cursor (v7) — icons live in THEME_CURSORS; styles in theme.css ──
-    // SMOOTH + LAG-FREE: ONE fixed element (dot = exact hotspot, icon rides beside it). The position is
-    // written once per frame from the latest pointer event (rAF scheduled inside the event, so it still
-    // lands in the same frame), with no layout reads, no filters and no transitions on the moving layer.
-    // Safety nets: (1) native HTML5 drag & drop hides the fake cursor, (2) if the main thread is so busy
-    // that the cursor trails the mouse, it auto-swaps to a real OS cursor drawn from the same icon
-    // (zero latency by construction) — also used on low-end devices.
+    // ── themed cursor (v7) — NATIVE, zero-lag ──
+    // The pointer itself is now a real CSS cursor image (arrow + the theme badge from THEME_CURSORS),
+    // drawn by the OS / compositor, not by the page. So it cannot lag, stutter under main-thread load,
+    // or freeze while you drag. Hover and pressed states are pure CSS (:hover / :active) — no listeners.
+    // The image is rebuilt in the current palette on every theme / mode change. Fine pointers only.
     (function cursorKit() {
         const root = document.documentElement;
         let fine = false;
         try { fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches; } catch (e) { /* ignore */ }
         window.__twCursorSync = function () { };
         if (!fine) return;
-        const CLICKABLE = 'a,button,summary,label,[role="button"],[role="tab"],[role="link"],[role="menuitem"],[role="switch"],input[type="button"],input[type="submit"],input[type="reset"],input[type="checkbox"],input[type="radio"],[onclick],[tabindex]:not([tabindex="-1"]),.btn,[class*="btn-"],[class*="-btn"],[class*="clickable"]';
-        const NATIVE = 'input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable=""],[contenteditable="true"]';
-        const OFF = 8, SZ = 30;
-        let el = null, ic = null, key = '', seen = false, native = false, raf = 0;
-        let x = -100, y = -100, tgt = null, tgtDone = null, vw = window.innerWidth, vh = window.innerHeight;
-        let fx = false, fy = false, evT = 0, bad = 0, good = 0;
-
-        function paint() { if (ic) ic.innerHTML = (key && window.THEME_CURSORS[key]) || ''; if (native) buildNative(); }
-        function build() {
-            if (el || !document.body) return;
-            el = document.createElement('div');
-            el.id = 'twCur';
-            el.setAttribute('aria-hidden', 'true');
-            el.innerHTML = '<i class="dt"></i><div class="ic"></div>';
-            ic = el.lastChild;
-            document.body.appendChild(el);
-            el.addEventListener('animationend', (e) => { if (e.animationName === 'twcPop') el.classList.remove('pop'); });
-            paint();
+        const ICON_CSS = '.f1{fill: @1}.f2{fill: @2}.fa{fill: @A}.fw{fill: #fff}.fg{fill: #3fae5f}.fo{fill: #e8b04a}.o2{stroke: @2;stroke-width: 1.5;stroke-linejoin: round;stroke-linecap: round}.ow{stroke: #fff;stroke-width: 1.1;stroke-linejoin: round}.k1, .k2, .ka, .kt, .ko{fill: none;stroke-linecap: round;stroke-linejoin: round}.k1{stroke: @1;stroke-width: 2.1}.k2{stroke: @2;stroke-width: 1.9}.ka{stroke: @A;stroke-width: 2.1}.kt{stroke: @2;stroke-width: 1.1;opacity: .8}.ko{stroke: @A;stroke-width: 2.2}.steam path{fill: none;stroke: @1;stroke-width: 1.8;stroke-linecap: round}.bd{fill: #fff7ea;stroke: @2;stroke-width: 1.8}.hd{fill: none;stroke: @2;stroke-width: 2.2;stroke-linecap: round}.cf{fill: #6b4226;stroke: @2;stroke-width: 1.4}.ht{fill: #ffd9c2}.pet ellipse{fill: @1;stroke: #fff;stroke-width: 1}.ct{fill: #ffd45c;stroke: #e0a12b;stroke-width: 1}.tw{fill: @1}.wn{fill: #7a1226}.gg{fill: rgba(255,255,255,.6)}.gb{fill: none;stroke: @2;stroke-width: 1.8;stroke-linejoin: round}.gs{fill: none;stroke: @2;stroke-width: 2;stroke-linecap: round}.hl{fill: none;stroke: rgba(255,255,255,.7);stroke-width: 1.4;stroke-linecap: round}.gwl{fill: @1;opacity: .22}.tk{fill: none;stroke: #8a5a30;stroke-width: 3;stroke-linecap: round}.fgn{fill: #2fa35f;stroke: #17703c}.fb{fill: #7a4a22}.wv{stroke-width: 3.2}.bowl{fill: #f4efdf}';
+        const ARROW = 'M3 2V22.5L8.4 17.6L11.8 25.4L15.4 23.8L12 16L19.3 15.4Z';
+        const HOVER = 'a[href],button:not(:disabled),summary,label[for],[role="button"],[role="tab"],[role="link"],[role="menuitem"],[role="switch"],input[type="button"],input[type="submit"],input[type="reset"],input[type="checkbox"],input[type="radio"],input[type="range"],[onclick],select,[tabindex]:not([tabindex="-1"])';
+        const TEXT = 'input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),textarea,[contenteditable=""],[contenteditable="true"]';
+        let el = null;
+        function svg(key, st, px, pal) {
+            const c1 = pal['--theme-primary'], c2 = pal['--theme-primary-dark'], ac = pal['--theme-accent'];
+            const css = ICON_CSS.replace(/@1/g, c1).replace(/@2/g, c2).replace(/@A/g, ac);
+            const inner = (window.THEME_CURSORS[key] || '').replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+            const bs = [0.5, 0.56, 0.44][st], r = [8.6, 9.4, 7.8][st], cx = 23, cy = 23.2, o = 17 * bs;
+            const fill = st === 1 ? ac : (st === 2 ? c2 : c1);
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="' + px + '" height="' + px + '" viewBox="0 0 32 32"><style>' + css + '</style>'
+                + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#fff" fill-opacity=".96" stroke="' + c1 + '" stroke-width="1.2"/>'
+                + '<g transform="translate(' + (cx - o) + ' ' + (cy - o) + ') scale(' + bs + ')">' + inner + '</g>'
+                + '<path d="' + ARROW + '" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="3.4" stroke-linejoin="round"/>'
+                + '<path d="' + ARROW + '" fill="' + fill + '" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
         }
-        // real OS cursor built from the live icon (computed colours inlined) — hardware-drawn, never lags
-        function buildNative() {
-            try {
-                const src = ic && ic.firstChild; if (!src || !key) return;
-                const clone = src.cloneNode(true);
-                const A = src.querySelectorAll('*'), B = clone.querySelectorAll('*');
-                const P = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill-opacity', 'stroke-opacity'];
-                for (let i = 0; i < A.length; i++) {
-                    const cs = getComputedStyle(A[i]); let s = '';
-                    for (let j = 0; j < P.length; j++) s += P[j] + ':' + cs.getPropertyValue(P[j]) + ';';
-                    if (!A[i].getAnimations || !A[i].getAnimations().length) { const o = cs.opacity; if (o && o !== '1') s += 'opacity:' + o + ';'; }
-                    B[i].setAttribute('style', s); B[i].removeAttribute('class');
-                }
-                clone.setAttribute('x', '8'); clone.setAttribute('y', '8'); clone.setAttribute('width', '23'); clone.setAttribute('height', '23');
-                const dot = (getComputedStyle(root).getPropertyValue('--theme-primary') || '#333').trim();
-                const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="4" cy="4" r="2.6" fill="' + dot + '" stroke="#fff" stroke-width="1.4"/>' + new XMLSerializer().serializeToString(clone) + '</svg>';
-                let st = document.getElementById('twNat');
-                if (!st) { st = document.createElement('style'); st.id = 'twNat'; document.head.appendChild(st); }
-                st.textContent = 'html[data-tw-ncur][data-tw-cursor] *{cursor:url("data:image/svg+xml,' + encodeURIComponent(svg) + '") 4 4,auto !important}';
-            } catch (e) { native = false; root.removeAttribute('data-tw-ncur'); }
-        }
-        function goNative() {
-            if (native || !el) return;
-            native = true; buildNative();
-            if (native) root.setAttribute('data-tw-ncur', '');
-        }
-        function hover(t) {
-            if (!(t instanceof Element)) return;
-            const nat = !!t.closest(NATIVE), hov = !nat && !!t.closest(CLICKABLE);
-            el.classList.toggle('nat', nat); el.classList.toggle('hov', hov);
-        }
-        function frame() {
-            raf = 0;
-            el.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
-            const nfx = x + OFF + SZ > vw, nfy = y + OFF + SZ > vh;
-            if (nfx !== fx) { fx = nfx; el.classList.toggle('fx', fx); }
-            if (nfy !== fy) { fy = nfy; el.classList.toggle('fy', fy); }
-            if (tgt !== tgtDone) { tgtDone = tgt; hover(tgt); }
-            if (evT && !native) {   // watchdog: event timestamp -> paint latency
-                const lag = performance.now() - evT;
-                if (lag > 0 && lag < 5000) {
-                    if (lag > 45) { good = 0; if (++bad > 28) goNative(); } else if (++good > 60) bad = 0;
-                }
-            }
+        function decl(key, st, pal) {
+            const u = (px) => 'url("data:image/svg+xml,' + encodeURIComponent(svg(key, st, px, pal)) + '")';
+            return 'cursor:' + u(32) + ' 3 2,auto !important;cursor:-webkit-image-set(' + u(32) + ' 1x,' + u(64) + ' 2x) 3 2,auto !important;';
         }
         function sync(presetKey) {
-            key = (window.THEME_CURSORS && window.THEME_CURSORS[presetKey]) ? presetKey : '';
-            if (!key) { root.removeAttribute('data-tw-cursor'); root.removeAttribute('data-tw-ncur'); native = false; }
-            else if (seen) root.setAttribute('data-tw-cursor', key);
-            paint();
+            const ok = !!(window.THEME_CURSORS && window.THEME_CURSORS[presetKey] && window.THEMES && window.THEMES[presetKey]);
+            if (!ok) { root.removeAttribute('data-tw-cursor'); if (el) el.textContent = ''; return; }
+            const mode = root.getAttribute('data-timawa-mode') === 'dark' ? 'dark' : 'light';
+            const pal = window.THEMES[presetKey][mode];
+            if (!el) { el = document.createElement('style'); el.id = 'twCurStyle'; document.head.appendChild(el); }
+            const P = 'html[data-tw-cursor]';
+            el.textContent =
+                P + ',' + P + ' *,' + P + ' *::before,' + P + ' *::after{' + decl(presetKey, 0, pal) + '}' +
+                P + ' :is(' + HOVER + '){' + decl(presetKey, 1, pal) + '}' +
+                P + ' :is(' + TEXT + '){cursor:text !important}' +
+                P + ' :is(' + HOVER + '):active,' + P + ' *:active{' + decl(presetKey, 2, pal) + '}' +
+                P + ' :is(' + TEXT + '):active{cursor:text !important}';
+            root.setAttribute('data-tw-cursor', presetKey);
         }
         window.__twCursorSync = sync;
-
-        const onMove = (e) => {
-            if (e.pointerType && e.pointerType !== 'mouse') return;
-            if (!seen) {
-                seen = true; build();
-                if (key) root.setAttribute('data-tw-cursor', key);
-                if (root.hasAttribute('data-tw-lite')) goNative();
-            }
-            if (!el) return;
-            x = e.clientX; y = e.clientY; tgt = e.target; evT = e.timeStamp;
-            if (el.classList.contains('out')) el.classList.remove('out');
-            if (!raf) raf = requestAnimationFrame(frame);
-        };
-        document.addEventListener('pointermove', onMove, { passive: true });
-        // HTML5 drag & drop: the browser shows its own drag cursor and stops pointermove — hide ours meanwhile
-        document.addEventListener('dragstart', () => { if (el) el.classList.add('out'); }, true);
-        const dragEnd = () => { if (el) el.classList.remove('out'); };
-        document.addEventListener('dragend', dragEnd, true);
-        document.addEventListener('drop', dragEnd, true);
-        document.addEventListener('pointerdown', (e) => {
-            if (!el || (e.pointerType && e.pointerType !== 'mouse')) return;
-            el.classList.add('dn'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
-        }, { passive: true });
-        const up = () => { if (el) el.classList.remove('dn'); };
-        document.addEventListener('pointerup', up, { passive: true });
-        document.addEventListener('pointercancel', up, { passive: true });
-        window.addEventListener('resize', () => { vw = window.innerWidth; vh = window.innerHeight; }, { passive: true });
-        root.addEventListener('mouseleave', () => { if (el) el.classList.add('out'); });
-        root.addEventListener('mouseenter', () => { if (el) el.classList.remove('out'); });
+        { const t0 = root.getAttribute('data-timawa-theme'); if (t0) sync(t0); }   // theme may already be applied
     })();
 
     window.DEFAULT_THEME = { preset: 'ocean', mode: 'light' };
@@ -1179,6 +1117,7 @@
         root.style.colorScheme = mode; // v6: native form controls / scrollbars follow the mode
         window.injectThemeShapes(presetKey);
         if (window.__twCursorSync) window.__twCursorSync(presetKey);
+        if (window.__twPerfProbe) window.__twPerfProbe();
         let meta = document.querySelector('meta[name="theme-color"]');
         if (!meta) {
             meta = document.createElement('meta');
@@ -1280,18 +1219,60 @@
         setTimeout(ensureShapesInjected, 100);
     });
 
-    // ── perf hooks: pause when hidden, lite mode on weak devices ──
+    // ── perf hooks (v8): pause when hidden, lite on weak devices, adaptive tier from measured frame time ──
+    // Tiers (html[data-tw-perf]): full > balanced (default) > eco > lite. A tiny rAF sampler (60 frames, then it
+    // stops) runs after load and after theme changes; if frames are slow it steps ONE tier down and remembers it
+    // (localStorage tw_perf, re-tested after 3 days). Force a tier any time: TW_PERF.set('full'|'balanced'|'eco'|'lite').
     (function perfHooks() {
         const root = document.documentElement;
+        const LV = ['full', 'balanced', 'eco', 'lite'];
+        let weak = false;
         try {
             const c = navigator.connection || {};
-            if ((navigator.deviceMemory && navigator.deviceMemory <= 2) ||
-                (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) || c.saveData)
-                root.setAttribute('data-tw-lite', '');
+            weak = !!((navigator.deviceMemory && navigator.deviceMemory <= 2) ||
+                (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) || c.saveData);
         } catch (e) { /* ignore */ }
+        let level = 'balanced';
+        try {
+            const st = JSON.parse(localStorage.getItem('tw_perf') || 'null');
+            if (st && LV.indexOf(st.l) >= 0 && Date.now() - st.t < 3 * 864e5) level = st.l;
+        } catch (e) { /* ignore */ }
+        if (weak && level !== 'full') level = 'lite';
+        function apply(l, remember) {
+            level = l;
+            root.setAttribute('data-tw-perf', l);
+            if (l === 'lite') root.setAttribute('data-tw-lite', ''); else if (!weak) root.removeAttribute('data-tw-lite');
+            if (remember) { try { localStorage.setItem('tw_perf', JSON.stringify({ l: l, t: Date.now() })); } catch (e) { /* ignore */ } }
+        }
+        apply(level, false);
+        window.TW_PERF = { get level() { return level; }, set: function (l) { if (LV.indexOf(l) >= 0) apply(l, true); } };
+
+        let sampling = false, last = 0;
+        function probe() {
+            if (sampling || level === 'lite' || document.hidden || Date.now() - last < 8000) return;
+            sampling = true; last = Date.now();
+            let prev = 0, n = 0; const d = [];
+            (function tick(t) {
+                if (document.hidden) { sampling = false; return; }
+                if (prev) { const dt = t - prev; if (dt < 250) d.push(dt); }
+                prev = t;
+                if (++n < 66) { requestAnimationFrame(tick); return; }
+                sampling = false;
+                d.splice(0, 6);                       // ignore warm-up frames
+                if (d.length < 30) return;
+                d.sort((x, y) => x - y);
+                const p75 = d[Math.floor(d.length * 0.75)];
+                if (p75 > 28 && level !== 'lite') {   // ~ under 36 fps -> drop one tier
+                    apply(LV[Math.min(LV.indexOf(level) + 1, LV.length - 1)], true);
+                    setTimeout(probe, 1500);
+                }
+            })(performance.now());
+        }
+        window.__twPerfProbe = function () { setTimeout(probe, 1200); };
+        if (document.readyState === 'complete') window.__twPerfProbe(); else window.addEventListener('load', window.__twPerfProbe);
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) root.setAttribute('data-tw-paused', '');
-            else root.removeAttribute('data-tw-paused');
+            else { root.removeAttribute('data-tw-paused'); window.__twPerfProbe(); }
         });
     })();
 })();
