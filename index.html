@@ -3009,6 +3009,19 @@
 
         let isUserLoggedIn = false;
 
+        // ================================================================
+        // ===== CAROUSEL STATE OBJECTS =====
+        // ================================================================
+        const highlightsCarouselState = {
+            slides: [],
+            currentIndex: 0,
+            interval: null
+        };
+
+        const coffeeCarouselState     = { slides: [], currentIndex: 0, interval: null };
+        const placesCarouselState     = { slides: [], currentIndex: 0, interval: null };
+        const activitiesCarouselState = { slides: [], currentIndex: 0, interval: null };
+
         let currentItem = null;
         let currentMember = null;
         let currentGalleryImages = [];
