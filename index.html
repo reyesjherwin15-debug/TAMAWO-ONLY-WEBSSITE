@@ -6249,6 +6249,66 @@
         }
 
         // ================================================================
+        // ===== USER PROFILE CACHE =====
+        // ================================================================
+        // Short-lived in-memory + sessionStorage cache to avoid re-reading
+        // the same user doc on every auth state change / navigation.
+        async function getCurrentUserProfileCached(user) {
+            if (!user || !user.uid) return null;
+
+            const uid = user.uid;
+            const now = Date.now();
+            const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+            // 1. In-memory cache (fastest, wiped on page reload)
+            const mem = userProfileCache[uid];
+            if (mem && mem._cachedAt && (now - mem._cachedAt) < CACHE_TTL) {
+                return mem;
+            }
+
+            // 2. sessionStorage cache (survives soft reloads in the same tab)
+            try {
+                const raw = sessionStorage.getItem('tamawo_me_' + uid);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.t && (now - parsed.t) < CACHE_TTL && parsed.data) {
+                        userProfileCache[uid] = { id: uid, _cachedAt: parsed.t, ...parsed.data };
+                        return userProfileCache[uid];
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            // 3. Firestore read (authoritative)
+            try {
+                const doc = await db.collection('users').doc(uid).get();
+                const data = doc.exists ? doc.data() : {};
+                const merged = { id: uid, _cachedAt: now, ...data };
+
+                userProfileCache[uid] = merged;
+
+                try {
+                    sessionStorage.setItem('tamawo_me_' + uid, JSON.stringify({
+                        uid, t: now, data
+                    }));
+                } catch (e) { /* quota / private mode — ignore */ }
+
+                return merged;
+            } catch (err) {
+                console.warn('getCurrentUserProfileCached: Firestore read failed, using auth fallback.', err);
+                // Fallback: at least give the caller the auth-provided fields
+                const fallback = {
+                    id: uid,
+                    _cachedAt: now,
+                    displayName: user.displayName || '',
+                    email: user.email || '',
+                    photoURL: user.photoURL || ''
+                };
+                userProfileCache[uid] = fallback;
+                return fallback;
+            }
+        }
+
+        // ================================================================
         // ===== NAV =====
         // ================================================================
         async function updateNavigation(user) {
