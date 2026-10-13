@@ -2956,6 +2956,7 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
+        // Use the modern cache API (silences the deprecation warning too)
         try {
             db.settings({
                 cache: firebase.firestore.persistentLocalCache({
@@ -2963,8 +2964,43 @@
                 })
             });
         } catch (e) {
-            console.warn('Firestore cache settings failed, falling back to default.', e);
+            console.warn('Firestore cache settings failed, using default.', e);
         }
+
+        // ================================================================
+        // ===== LOADING OVERLAY SAFETY NET =====
+        // ================================================================
+        // Hide the overlay no matter what — even if Firebase auth never
+        // settles, a script throws, or the network is down. This runs on
+        // a fixed timer independent of any async chain.
+        (function () {
+            const FORCE_HIDE_MS = 2500;
+
+            function forceHideLoader(reason) {
+                const overlay = document.getElementById('loadingOverlay');
+                if (!overlay) return;
+                if (!overlay.classList.contains('active')) return;
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                console.log('[loader] hidden —', reason);
+            }
+
+            // Fire once the DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    setTimeout(() => forceHideLoader('DOMContentLoaded + ' + FORCE_HIDE_MS + 'ms'), FORCE_HIDE_MS);
+                });
+            } else {
+                setTimeout(() => forceHideLoader('script ran + ' + FORCE_HIDE_MS + 'ms'), FORCE_HIDE_MS);
+            }
+
+            // Also try immediately (in case DOM is already parsed)
+            setTimeout(() => forceHideLoader('immediate check'), 300);
+
+            // Catch any uncaught error and still hide the loader
+            window.addEventListener('error', () => forceHideLoader('window error'));
+            window.addEventListener('unhandledrejection', () => forceHideLoader('unhandled rejection'));
+        })();
 
         const CLOUDINARY_CONFIG = { cloudName: "x7i7vzvo", uploadPreset: "t-amawo" };
 
